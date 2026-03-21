@@ -19,6 +19,7 @@ import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { ScanReport } from "../scan/scan-report";
 import { Weather } from "./weather";
 
 const PurePreviewMessage = ({
@@ -295,6 +296,41 @@ const PurePreviewMessage = ({
                   )
                 }
               />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    if (type === "tool-analyzeConfig" || type === "tool-scanGithubRepo") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className="w-[min(100%,680px)]"
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader state={state} type={type} />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+            {state === "output-available" && (
+              <ToolOutput
+                errorText={undefined}
+                output={
+                  <ScanReport
+                    output={part.output}
+                    toolName={
+                      type === "tool-scanGithubRepo"
+                        ? "scanGithubRepo"
+                        : "analyzeConfig"
+                    }
+                  />
+                }
+              />
+            )}
+            {state === "output-error" && (
+              <ToolOutput errorText={part.errorText} output={part.output} />
             )}
           </ToolContent>
         </Tool>

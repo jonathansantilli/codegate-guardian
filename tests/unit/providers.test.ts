@@ -25,7 +25,7 @@ describe("providers helpers", () => {
       resolveGeminiApiKey({
         GOOGLE_GENERATIVE_AI_API_KEY: "google-key",
         GEMINI_API_KEY: "gemini-key",
-      } as NodeJS.ProcessEnv),
+      } as unknown as NodeJS.ProcessEnv),
       "google-key"
     );
   });
@@ -34,7 +34,7 @@ describe("providers helpers", () => {
     assert.equal(
       resolveGeminiApiKey({
         GEMINI_API_KEY: "gemini-key",
-      } as NodeJS.ProcessEnv),
+      } as unknown as NodeJS.ProcessEnv),
       "gemini-key"
     );
   });
