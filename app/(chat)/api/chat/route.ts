@@ -20,11 +20,12 @@ import {
 } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
+import { analyzeConfig } from "@/lib/ai/tools/analyze-config";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
-import { analyzeConfig } from "@/lib/ai/tools/analyze-config";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { scanGithubRepo } from "@/lib/ai/tools/scan-github-repo";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
           experimental_activeTools:
             isReasoningModel && !supportsTools
               ? []
-              : ["analyzeConfig"],
+              : ["analyzeConfig", "scanGithubRepo"],
           providerOptions: {
             ...(modelConfig?.gatewayOrder && {
               gateway: { order: modelConfig.gatewayOrder },
@@ -211,6 +212,7 @@ export async function POST(request: Request) {
           },
           tools: {
             analyzeConfig,
+            scanGithubRepo,
             getWeather,
             createDocument: createDocument({
               session,
