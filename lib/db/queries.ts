@@ -772,45 +772,80 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
 export async function getReportingOverviewByUserId({
   userId,
 }: {
-  userId: string;
+  userId?: string | null;
 }): Promise<ReportingOverview> {
   try {
-    const runs = await db
-      .select({
-        id: scanRun.id,
-        chatId: scanRun.chatId,
-        chatTitle: chat.title,
-        createdAt: scanRun.createdAt,
-        toolName: scanRun.toolName,
-        scanMode: scanRun.scanMode,
-        repositoryUrl: scanRun.repositoryUrl,
-        selectedSkill: scanRun.selectedSkill,
-        guessedPath: scanRun.guessedPath,
-        findingsTotal: scanRun.findingsTotal,
-      })
-      .from(scanRun)
-      .innerJoin(chat, eq(chat.id, scanRun.chatId))
-      .where(eq(chat.userId, userId));
+    const runs = userId
+      ? await db
+          .select({
+            id: scanRun.id,
+            chatId: scanRun.chatId,
+            chatTitle: chat.title,
+            createdAt: scanRun.createdAt,
+            toolName: scanRun.toolName,
+            scanMode: scanRun.scanMode,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+            guessedPath: scanRun.guessedPath,
+            findingsTotal: scanRun.findingsTotal,
+          })
+          .from(scanRun)
+          .innerJoin(chat, eq(chat.id, scanRun.chatId))
+          .where(eq(chat.userId, userId))
+      : await db
+          .select({
+            id: scanRun.id,
+            chatId: scanRun.chatId,
+            chatTitle: chat.title,
+            createdAt: scanRun.createdAt,
+            toolName: scanRun.toolName,
+            scanMode: scanRun.scanMode,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+            guessedPath: scanRun.guessedPath,
+            findingsTotal: scanRun.findingsTotal,
+          })
+          .from(scanRun)
+          .innerJoin(chat, eq(chat.id, scanRun.chatId));
 
-    const findingsRows = await db
-      .select({
-        id: scanFinding.id,
-        scanRunId: scanFinding.scanRunId,
-        chatId: scanRun.chatId,
-        createdAt: scanFinding.createdAt,
-        severity: scanFinding.severity,
-        category: scanFinding.category,
-        layer: scanFinding.layer,
-        filePath: scanFinding.filePath,
-        description: scanFinding.description,
-        evidence: scanFinding.evidence,
-        repositoryUrl: scanRun.repositoryUrl,
-        selectedSkill: scanRun.selectedSkill,
-      })
-      .from(scanFinding)
-      .innerJoin(scanRun, eq(scanRun.id, scanFinding.scanRunId))
-      .innerJoin(chat, eq(chat.id, scanRun.chatId))
-      .where(eq(chat.userId, userId));
+    const findingsRows = userId
+      ? await db
+          .select({
+            id: scanFinding.id,
+            scanRunId: scanFinding.scanRunId,
+            chatId: scanRun.chatId,
+            createdAt: scanFinding.createdAt,
+            severity: scanFinding.severity,
+            category: scanFinding.category,
+            layer: scanFinding.layer,
+            filePath: scanFinding.filePath,
+            description: scanFinding.description,
+            evidence: scanFinding.evidence,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+          })
+          .from(scanFinding)
+          .innerJoin(scanRun, eq(scanRun.id, scanFinding.scanRunId))
+          .innerJoin(chat, eq(chat.id, scanRun.chatId))
+          .where(eq(chat.userId, userId))
+      : await db
+          .select({
+            id: scanFinding.id,
+            scanRunId: scanFinding.scanRunId,
+            chatId: scanRun.chatId,
+            createdAt: scanFinding.createdAt,
+            severity: scanFinding.severity,
+            category: scanFinding.category,
+            layer: scanFinding.layer,
+            filePath: scanFinding.filePath,
+            description: scanFinding.description,
+            evidence: scanFinding.evidence,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+          })
+          .from(scanFinding)
+          .innerJoin(scanRun, eq(scanRun.id, scanFinding.scanRunId))
+          .innerJoin(chat, eq(chat.id, scanRun.chatId));
 
     const findings = findingsRows
       .filter((finding): finding is typeof finding & { severity: ReportSeverity } => {
