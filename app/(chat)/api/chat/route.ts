@@ -36,6 +36,7 @@ import {
   getMessagesByChatId,
   saveChat,
   saveMessages,
+  syncScanReportsForMessages,
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
@@ -249,6 +250,13 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages: finishedMessages }) => {
+        const createdAtByMessageId = new Map(
+          messagesFromDb.map((currentMessage) => [
+            currentMessage.id,
+            currentMessage.createdAt,
+          ])
+        );
+
         if (isToolApprovalFlow) {
           for (const finishedMsg of finishedMessages) {
             const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
@@ -281,6 +289,18 @@ export async function POST(request: Request) {
               createdAt: new Date(),
               attachments: [],
               chatId: id,
+            })),
+          });
+        }
+
+        if (finishedMessages.length > 0) {
+          await syncScanReportsForMessages({
+            messages: finishedMessages.map((currentMessage) => ({
+              chatId: id,
+              id: currentMessage.id,
+              parts: currentMessage.parts,
+              createdAt:
+                createdAtByMessageId.get(currentMessage.id) ?? new Date(),
             })),
           });
         }

@@ -94,7 +94,15 @@ export const analyzeConfig = tool({
       try {
         scannerOutput = execFileSync(
           "npx",
-          ["codegate-ai", "scan", tmpDir, "--no-tui", "--format", "json"],
+          [
+            "codegate",
+            "scan",
+            tmpDir,
+            "--force",
+            "--format",
+            "json",
+            "--no-tui",
+          ],
           {
             encoding: "utf8",
             timeout: CODEGATE_TIMEOUT_MS,
