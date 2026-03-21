@@ -16,6 +16,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import {
+  extractFindingLocations,
+  extractStringArrayField,
+  type FindingLocation,
+} from "@/lib/security/report-finding-detail";
 import { extractNormalizedScanRunsFromMessages } from "@/lib/security/report-normalization";
 import {
   buildReportingOverview,
@@ -30,9 +35,9 @@ import {
   type DBMessage,
   document,
   message,
+  type Suggestion,
   scanFinding,
   scanRun,
-  type Suggestion,
   stream,
   suggestion,
   type User,
@@ -288,7 +293,9 @@ export async function syncScanReportsForMessages({
   messages: Pick<DBMessage, "chatId" | "id" | "parts" | "createdAt">[];
 }) {
   try {
-    const uniqueMessageIds = [...new Set(messages.map((current) => current.id))];
+    const uniqueMessageIds = [
+      ...new Set(messages.map((current) => current.id)),
+    ];
 
     if (uniqueMessageIds.length === 0) {
       return { scanRuns: 0, findings: 0 };
@@ -330,30 +337,32 @@ export async function syncScanReportsForMessages({
 
       const insertedRuns = await tx
         .insert(scanRun)
-        .values(normalizedRuns.map((currentRun) => {
-          const normalizedScanMode: "repository" | "skills" | null =
-            currentRun.scanMode === "repository" ||
-            currentRun.scanMode === "skills"
-              ? currentRun.scanMode
-              : null;
+        .values(
+          normalizedRuns.map((currentRun) => {
+            const normalizedScanMode: "repository" | "skills" | null =
+              currentRun.scanMode === "repository" ||
+              currentRun.scanMode === "skills"
+                ? currentRun.scanMode
+                : null;
 
-          return {
-            chatId: currentRun.chatId,
-            messageId: currentRun.messageId,
-            toolCallId: currentRun.toolCallId,
-            toolName: currentRun.toolName,
-            mode: currentRun.mode,
-            scanMode: normalizedScanMode,
-            repositoryUrl: currentRun.repositoryUrl,
-            selectedSkill: currentRun.selectedSkill,
-            guessedPath: currentRun.guessedPath,
-            findingsTotal: currentRun.findingsTotal,
-            summaryBySeverity: currentRun.summaryBySeverity,
-            rawOutput: currentRun.rawOutput,
-            rawReport: currentRun.rawReport,
-            createdAt: currentRun.createdAt,
-          };
-        }))
+            return {
+              chatId: currentRun.chatId,
+              messageId: currentRun.messageId,
+              toolCallId: currentRun.toolCallId,
+              toolName: currentRun.toolName,
+              mode: currentRun.mode,
+              scanMode: normalizedScanMode,
+              repositoryUrl: currentRun.repositoryUrl,
+              selectedSkill: currentRun.selectedSkill,
+              guessedPath: currentRun.guessedPath,
+              findingsTotal: currentRun.findingsTotal,
+              summaryBySeverity: currentRun.summaryBySeverity,
+              rawOutput: currentRun.rawOutput,
+              rawReport: currentRun.rawReport,
+              createdAt: currentRun.createdAt,
+            };
+          })
+        )
         .returning({
           id: scanRun.id,
           messageId: scanRun.messageId,
@@ -848,15 +857,17 @@ export async function getReportingOverviewByUserId({
           .innerJoin(chat, eq(chat.id, scanRun.chatId));
 
     const findings = findingsRows
-      .filter((finding): finding is typeof finding & { severity: ReportSeverity } => {
-        return (
-          finding.severity === "CRITICAL" ||
-          finding.severity === "HIGH" ||
-          finding.severity === "MEDIUM" ||
-          finding.severity === "LOW" ||
-          finding.severity === "INFO"
-        );
-      })
+      .filter(
+        (finding): finding is typeof finding & { severity: ReportSeverity } => {
+          return (
+            finding.severity === "CRITICAL" ||
+            finding.severity === "HIGH" ||
+            finding.severity === "MEDIUM" ||
+            finding.severity === "LOW" ||
+            finding.severity === "INFO"
+          );
+        }
+      )
       .map((finding) => ({
         ...finding,
         severity: finding.severity,
@@ -876,6 +887,179 @@ export async function getReportingOverviewByUserId({
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get reporting overview by user id"
+    );
+  }
+}
+
+export type ReportingFindingDetail = {
+  id: string;
+  findingId: string;
+  scanRunId: string;
+  chatId: string;
+  createdAt: Date;
+  severity: ReportSeverity;
+  category: string | null;
+  layer: string | null;
+  ruleId: string | null;
+  filePath: string | null;
+  description: string;
+  evidence: string | null;
+  repositoryUrl: string | null;
+  selectedSkill: string | null;
+  scanMode: "repository" | "skills" | null;
+  toolName: "analyzeConfig" | "scanGithubRepo";
+  confidence: string | null;
+  cwe: string | null;
+  owasp: string[];
+  fixable: boolean | null;
+  primaryLocation: FindingLocation | null;
+  affectedLocations: FindingLocation[];
+  remediationActions: string[];
+  affectedTools: string[];
+};
+
+function toReportSeverity(value: unknown): ReportSeverity | null {
+  if (
+    value === "CRITICAL" ||
+    value === "HIGH" ||
+    value === "MEDIUM" ||
+    value === "LOW" ||
+    value === "INFO"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+export async function getReportingFindingDetailById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId?: string | null;
+}): Promise<ReportingFindingDetail | null> {
+  try {
+    const rows = userId
+      ? await db
+          .select({
+            id: scanFinding.id,
+            findingId: scanFinding.findingId,
+            scanRunId: scanFinding.scanRunId,
+            chatId: scanRun.chatId,
+            createdAt: scanFinding.createdAt,
+            severity: scanFinding.severity,
+            category: scanFinding.category,
+            layer: scanFinding.layer,
+            ruleId: scanFinding.ruleId,
+            filePath: scanFinding.filePath,
+            description: scanFinding.description,
+            evidence: scanFinding.evidence,
+            confidence: scanFinding.confidence,
+            cwe: scanFinding.cwe,
+            owasp: scanFinding.owasp,
+            fixable: scanFinding.fixable,
+            rawFinding: scanFinding.rawFinding,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+            scanMode: scanRun.scanMode,
+            toolName: scanRun.toolName,
+          })
+          .from(scanFinding)
+          .innerJoin(scanRun, eq(scanRun.id, scanFinding.scanRunId))
+          .innerJoin(chat, eq(chat.id, scanRun.chatId))
+          .where(and(eq(scanFinding.id, id), eq(chat.userId, userId)))
+          .limit(1)
+      : await db
+          .select({
+            id: scanFinding.id,
+            findingId: scanFinding.findingId,
+            scanRunId: scanFinding.scanRunId,
+            chatId: scanRun.chatId,
+            createdAt: scanFinding.createdAt,
+            severity: scanFinding.severity,
+            category: scanFinding.category,
+            layer: scanFinding.layer,
+            ruleId: scanFinding.ruleId,
+            filePath: scanFinding.filePath,
+            description: scanFinding.description,
+            evidence: scanFinding.evidence,
+            confidence: scanFinding.confidence,
+            cwe: scanFinding.cwe,
+            owasp: scanFinding.owasp,
+            fixable: scanFinding.fixable,
+            rawFinding: scanFinding.rawFinding,
+            repositoryUrl: scanRun.repositoryUrl,
+            selectedSkill: scanRun.selectedSkill,
+            scanMode: scanRun.scanMode,
+            toolName: scanRun.toolName,
+          })
+          .from(scanFinding)
+          .innerJoin(scanRun, eq(scanRun.id, scanFinding.scanRunId))
+          .innerJoin(chat, eq(chat.id, scanRun.chatId))
+          .where(eq(scanFinding.id, id))
+          .limit(1);
+
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    const severity = toReportSeverity(row.severity);
+    if (!severity) {
+      return null;
+    }
+
+    const { primaryLocation, affectedLocations } = extractFindingLocations({
+      filePath: row.filePath,
+      evidence: row.evidence,
+      rawFinding: row.rawFinding,
+    });
+
+    return {
+      id: row.id,
+      findingId: row.findingId,
+      scanRunId: row.scanRunId,
+      chatId: row.chatId,
+      createdAt: row.createdAt,
+      severity,
+      category: row.category,
+      layer: row.layer,
+      ruleId: row.ruleId,
+      filePath: row.filePath,
+      description: row.description,
+      evidence: row.evidence,
+      repositoryUrl: row.repositoryUrl,
+      selectedSkill: row.selectedSkill,
+      scanMode:
+        row.scanMode === "repository" || row.scanMode === "skills"
+          ? row.scanMode
+          : null,
+      toolName: row.toolName,
+      confidence: row.confidence,
+      cwe: row.cwe,
+      owasp: toStringArray(row.owasp),
+      fixable: row.fixable,
+      primaryLocation,
+      affectedLocations,
+      remediationActions: extractStringArrayField(
+        row.rawFinding,
+        "remediation_actions"
+      ),
+      affectedTools: extractStringArrayField(row.rawFinding, "affected_tools"),
+    };
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get reporting finding detail by id"
     );
   }
 }

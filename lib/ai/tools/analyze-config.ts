@@ -4,6 +4,10 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { tool } from "ai";
 import { z } from "zod";
+import {
+  buildCodegateScanNpxArgs,
+  withCodegateNpmEnv,
+} from "@/lib/security/codegate-cli";
 
 const CODEGATE_TIMEOUT_MS = 30_000;
 const CODEGATE_MAX_BUFFER = 5 * 1024 * 1024;
@@ -94,19 +98,12 @@ export const analyzeConfig = tool({
       try {
         scannerOutput = execFileSync(
           "npx",
-          [
-            "codegate",
-            "scan",
-            tmpDir,
-            "--force",
-            "--format",
-            "json",
-            "--no-tui",
-          ],
+          buildCodegateScanNpxArgs({ target: tmpDir }),
           {
             encoding: "utf8",
             timeout: CODEGATE_TIMEOUT_MS,
             maxBuffer: CODEGATE_MAX_BUFFER,
+            env: withCodegateNpmEnv(),
           }
         );
       } catch (error) {

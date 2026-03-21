@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
 import {
   type Dirent,
   existsSync,
@@ -9,8 +10,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import * as git from "isomorphic-git";
+import http from "isomorphic-git/http/node";
 import { tool } from "ai";
 import { z } from "zod";
+import {
+  buildCodegateScanNpxArgs,
+  withCodegateNpmEnv,
+} from "@/lib/security/codegate-cli";
 
 const CODEGATE_TIMEOUT_MS = 120_000;
 const CODEGATE_MAX_BUFFER = 10 * 1024 * 1024;
@@ -251,34 +258,22 @@ export function routeSkillScanRequest({
   return { action: "needs-selection", availableSkills };
 }
 
-function cloneRepository(url: string, destination: string) {
-  execFileSync(
-    "git",
-    [
-      "clone",
-      "--quiet",
-      "--depth",
-      "1",
-      "--filter=blob:none",
-      url,
-      destination,
-    ],
-    {
-      encoding: "utf8",
-      timeout: CODEGATE_TIMEOUT_MS,
-      maxBuffer: CODEGATE_MAX_BUFFER,
-    }
-  );
+async function cloneRepository(url: string, destination: string) {
+  await git.clone({
+    fs,
+    http,
+    dir: destination,
+    url,
+    singleBranch: true,
+    depth: 1,
+  });
 }
 
 function runCodegateScan(target: string, skillName?: string) {
-  const args = ["codegate", "scan", target];
-
-  if (skillName) {
-    args.push("--skill", skillName);
-  }
-
-  args.push("--force", "--format", "json", "--no-tui");
+  const args = buildCodegateScanNpxArgs({
+    target,
+    skillName,
+  });
 
   let scannerOutput = "";
   try {
@@ -286,6 +281,7 @@ function runCodegateScan(target: string, skillName?: string) {
       encoding: "utf8",
       timeout: CODEGATE_TIMEOUT_MS,
       maxBuffer: CODEGATE_MAX_BUFFER,
+      env: withCodegateNpmEnv(),
     });
   } catch (error) {
     const err = error as CodegateError;
@@ -450,7 +446,7 @@ export const scanGithubRepo = tool({
       .optional()
       .describe("Optional skill name when scanMode is skills"),
   }),
-  execute: ({ repositoryUrl, scanMode, skillName }) => {
+  execute: async ({ repositoryUrl, scanMode, skillName }) => {
     try {
       const normalizedUrl = normalizeGithubRepositoryUrl(repositoryUrl);
       const tempRoot = mkdtempSync(join(tmpdir(), "codegate-scan-repo-"));
@@ -459,34 +455,32 @@ export const scanGithubRepo = tool({
       try {
         let repositoryReport: CodegateReport | null = null;
         let repositoryScanNeedsSkillSelection = false;
-        let repositoryUrlScanNeedsSkillSelection = false;
+        try {
+          await cloneRepository(normalizedUrl, repoDir);
+        } catch (error) {
+          const cloneError = error as Error;
+          throw new Error(
+            `Unable to fetch repository from GitHub (${normalizedUrl}): ${cloneError.message}`
+          );
+        }
+        const availableSkills = discoverSkillsInRepository(repoDir);
 
         if (scanMode === "repository") {
           try {
-            repositoryReport = runCodegateScan(normalizedUrl);
+            repositoryReport = runCodegateScan(repoDir);
           } catch (error) {
             if (error instanceof SkillSelectionRequiredError) {
               repositoryScanNeedsSkillSelection = true;
-              repositoryUrlScanNeedsSkillSelection = true;
             } else {
               throw error;
             }
           }
         }
 
-        let availableSkills: string[] = [];
-        try {
-          cloneRepository(normalizedUrl, repoDir);
-          availableSkills = discoverSkillsInRepository(repoDir);
-        } catch {
-          availableSkills = [];
-        }
-
         if (
           scanMode === "repository" &&
           repositoryScanNeedsSkillSelection &&
-          !repositoryReport &&
-          existsSync(repoDir)
+          !repositoryReport
         ) {
           try {
             repositoryReport = runCodegateScan(repoDir);
@@ -552,8 +546,11 @@ export const scanGithubRepo = tool({
           const baseRepositoryReport = repositoryReport;
 
           if (availableSkills.length === 1) {
-            const autoSkill = availableSkills[0]!;
-            const skillReport = runCodegateScan(normalizedUrl, autoSkill);
+            const autoSkill = availableSkills[0];
+            if (!autoSkill) {
+              throw new Error("No auto-selected skill available");
+            }
+            const skillReport = runCodegateScan(repoDir, autoSkill);
             const mergedReport = baseRepositoryReport
               ? mergeCodegateReports([baseRepositoryReport, skillReport])
               : skillReport;
@@ -578,14 +575,14 @@ export const scanGithubRepo = tool({
             };
           }
 
-          if (
-            availableSkills.length > 1 &&
-            repositoryUrlScanNeedsSkillSelection
-          ) {
-            const fallbackSkill = availableSkills[0]!;
+          if (availableSkills.length > 1 && repositoryScanNeedsSkillSelection) {
+            const fallbackSkill = availableSkills[0];
+            if (!fallbackSkill) {
+              throw new Error("No fallback skill available");
+            }
 
             try {
-              const skillReport = runCodegateScan(normalizedUrl, fallbackSkill);
+              const skillReport = runCodegateScan(repoDir, fallbackSkill);
               const mergedReport = baseRepositoryReport
                 ? mergeCodegateReports([baseRepositoryReport, skillReport])
                 : skillReport;
@@ -664,7 +661,7 @@ export const scanGithubRepo = tool({
         if (decision.action === "scan-all-skills") {
           const skillReports = decision.skillNames.map((currentSkill) => ({
             skill: currentSkill,
-            report: runCodegateScan(normalizedUrl, currentSkill),
+            report: runCodegateScan(repoDir, currentSkill),
           }));
           const mergedReport = mergeCodegateReports(
             skillReports.map((currentReport) => currentReport.report)
@@ -688,7 +685,7 @@ export const scanGithubRepo = tool({
           };
         }
 
-        const parsed = runCodegateScan(normalizedUrl, decision.skillName);
+        const parsed = runCodegateScan(repoDir, decision.skillName);
         return {
           mode: "scan_github_repo",
           scan_mode: scanMode,
