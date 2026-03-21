@@ -50,4 +50,25 @@ describe("codegate cli invocation", () => {
     });
     assert.equal(env.npm_config_cache, "/tmp/.npm");
   });
+
+  test("forces writable runtime home when HOME is missing", () => {
+    const env = withCodegateNpmEnv({
+      ...process.env,
+      HOME: "",
+      CODEGATE_HOME: "",
+    });
+
+    assert.equal(env.HOME, "/tmp");
+    assert.equal(env.CODEGATE_HOME, "/tmp/.codegate");
+  });
+
+  test("keeps explicit CODEGATE_HOME when provided", () => {
+    const env = withCodegateNpmEnv({
+      ...process.env,
+      HOME: "",
+      CODEGATE_HOME: "/tmp/custom-codegate-home",
+    });
+
+    assert.equal(env.CODEGATE_HOME, "/tmp/custom-codegate-home");
+  });
 });
