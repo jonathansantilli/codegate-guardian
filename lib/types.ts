@@ -5,6 +5,7 @@ import type { analyzeConfig } from "./ai/tools/analyze-config";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
+import type { scanGithubRepo } from "./ai/tools/scan-github-repo";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 
@@ -16,6 +17,7 @@ export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
 type weatherTool = InferUITool<typeof getWeather>;
 type analyzeConfigTool = InferUITool<typeof analyzeConfig>;
+type scanGithubRepoTool = InferUITool<typeof scanGithubRepo>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
@@ -24,6 +26,7 @@ type requestSuggestionsTool = InferUITool<
 
 export type ChatTools = {
   analyzeConfig: analyzeConfigTool;
+  scanGithubRepo: scanGithubRepoTool;
   getWeather: weatherTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
