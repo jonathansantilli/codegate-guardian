@@ -42,6 +42,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
   experimental: {
     prefetchInlining: true,
     cachedNavigations: true,

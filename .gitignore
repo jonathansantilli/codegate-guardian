@@ -27,6 +27,7 @@ yarn-error.log*
 .vscode/
 next-env.d.ts
 tsconfig.tsbuildinfo
+local-models.config.json
 
 # Project docs to keep local only
 docs/codegate-guardian-hackathon-handoff.md

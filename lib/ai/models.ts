@@ -23,6 +23,12 @@ export type ChatModel = {
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
 };
 
+export const LOCAL_CLI_MODEL_PREFIXES = ["claude-code/", "codex/"] as const;
+
+export function isLocalCliModelId(id: string) {
+  return LOCAL_CLI_MODEL_PREFIXES.some((prefix) => id.startsWith(prefix));
+}
+
 export const chatModels: ChatModel[] = [
   {
     id: "google/gemini-2.5-pro",
@@ -112,6 +118,10 @@ export async function getCapabilities(): Promise<
           vision: false,
           reasoning: false,
         };
+
+      if (isLocalCliModelId(model.id)) {
+        return [model.id, fallbackCapabilities];
+      }
 
       try {
         const res = await fetch(

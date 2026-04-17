@@ -39,6 +39,18 @@ export function getLanguageModel(modelId: string) {
     return googleProvider.languageModel(normalizeGeminiModelId(modelId));
   }
 
+  if (modelId.startsWith("claude-code/")) {
+    const {
+      createClaudeCodeLocalModel,
+    } = require("./providers/claude-code-local");
+    return createClaudeCodeLocalModel(modelId.replace(/^claude-code\//, ""));
+  }
+
+  if (modelId.startsWith("codex/")) {
+    const { createCodexLocalModel } = require("./providers/codex-local");
+    return createCodexLocalModel(modelId.replace(/^codex\//, ""));
+  }
+
   return gateway.languageModel(modelId);
 }
 
