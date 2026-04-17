@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Static checks (type-check, lint)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+      - name: Lint
+        run: pnpm check
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-22.04
+    needs: static-checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  integration-tests:
+    name: Integration tests (testcontainers)
+    runs-on: ubuntu-22.04
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Pre-pull test images
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7-alpine
+      - name: Run integration tests
+        run: pnpm test:integration
+        env:
+          NODE_ENV: test
+
+  e2e-smoke:
+    name: E2E smoke subset
+    runs-on: ubuntu-22.04
+    needs: integration-tests
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AUTH_SECRET: ci-test-auth-secret-ci-test-auth-secret-ci
+      POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      NEXT_PUBLIC_BASE_PATH: ""
+      # LLM-dependent E2E tests require one of these keys. In Phase 4+
+      # the LLM port will let us stub this reliably; until then, the
+      # smoke subset runs only against API-independent scenarios.
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
+      - name: Install Playwright (Chromium)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Apply database migrations
+        run: pnpm db:migrate
+      - name: Run E2E smoke subset
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
