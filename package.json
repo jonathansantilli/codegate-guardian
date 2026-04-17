@@ -16,7 +16,12 @@
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
     "db:up": "drizzle-kit up",
-    "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
+    "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test:unit": "tsx --test 'tests/unit/**/*.test.ts'",
+    "test:unit:watch": "tsx --test --watch 'tests/unit/**/*.test.ts'",
+    "test:unit:coverage": "c8 --reporter=text --reporter=lcov --include='src/domain/**/*.ts' --include='src/application/**/*.ts' pnpm test:unit",
+    "test:integration": "tsx --test 'tests/integration/**/*.test.ts'",
+    "test:e2e": "export PLAYWRIGHT=True && pnpm exec playwright test"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.52",
@@ -94,6 +99,8 @@
     "@playwright/test": "^1.50.1",
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/typography": "^0.5.15",
+    "@testcontainers/postgresql": "^11.14.0",
+    "@testcontainers/redis": "^11.14.0",
     "@types/d3-scale": "^4.0.8",
     "@types/node": "^22.8.6",
     "@types/papaparse": "^5.3.15",
@@ -101,9 +108,11 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "babel-plugin-react-compiler": "^1.0.0",
+    "c8": "^11.0.0",
     "drizzle-kit": "^0.25.0",
     "postcss": "^8",
     "tailwindcss": "^4.1.13",
+    "testcontainers": "^11.14.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
     "ultracite": "^7.0.11"

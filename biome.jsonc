@@ -52,5 +52,91 @@
         "useTopLevelRegex": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/domain/**/*.ts", "src/domain/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "warn",
+              "options": {
+                "paths": {
+                  "@vercel/blob": "Vercel dependency — domain must stay pure.",
+                  "@vercel/functions": "Vercel dependency — domain must stay pure.",
+                  "@vercel/otel": "Vercel dependency — domain must stay pure.",
+                  "@vercel/analytics": "Vercel dependency — domain must stay pure.",
+                  "botid": "Vercel dependency — domain must stay pure.",
+                  "next": "Domain layer must not import Next.js.",
+                  "next/server": "Domain layer must not import Next.js.",
+                  "react": "Domain layer must not import React.",
+                  "drizzle-orm": "Domain layer must not import ORM.",
+                  "postgres": "Domain layer must not import the DB driver.",
+                  "ai": "Domain layer must not import the AI SDK."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/application/**/*.ts",
+        "src/application/**/*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "warn",
+              "options": {
+                "paths": {
+                  "@vercel/blob": "Application layer is framework-free.",
+                  "@vercel/functions": "Application layer is framework-free.",
+                  "@vercel/otel": "Application layer is framework-free.",
+                  "@vercel/analytics": "Application layer is framework-free.",
+                  "botid": "Application layer is framework-free.",
+                  "next": "Application layer must not import Next.js.",
+                  "next/server": "Application layer must not import Next.js.",
+                  "react": "Application layer must not import React.",
+                  "drizzle-orm": "Application layer must not import ORM.",
+                  "postgres": "Application layer must not import the DB driver.",
+                  "ai": "Application layer must not import the AI SDK."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/src/infrastructure/*"],
+                    "message": "Application layer must depend only on its own ports — never infrastructure."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.ts", "**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "warn",
+              "options": {
+                "paths": {
+                  "@vercel/blob": "Vercel dependency — decouple per docs/decouple-vercel.md.",
+                  "@vercel/functions": "Vercel dependency — decouple per docs/decouple-vercel.md.",
+                  "@vercel/otel": "Vercel dependency — decouple per docs/decouple-vercel.md.",
+                  "@vercel/analytics": "Vercel dependency — decouple per docs/decouple-vercel.md.",
+                  "botid": "Vercel dependency — decouple per docs/decouple-vercel.md."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
