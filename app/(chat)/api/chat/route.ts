@@ -12,6 +12,7 @@ import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { resolveLocalCliModels } from "@/lib/ai/local-models-config";
 import {
   allowedModelIds,
   chatModels,
@@ -83,9 +84,13 @@ export async function POST(request: Request) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    const chatModel = allowedModelIds.has(selectedChatModel)
-      ? selectedChatModel
-      : DEFAULT_CHAT_MODEL;
+    const localModelIds = new Set(
+      resolveLocalCliModels().models.map((m) => m.id)
+    );
+    const isAllowedModel =
+      allowedModelIds.has(selectedChatModel) ||
+      localModelIds.has(selectedChatModel);
+    const chatModel = isAllowedModel ? selectedChatModel : DEFAULT_CHAT_MODEL;
 
     await checkIpRateLimit(ipAddress(request));
 
@@ -199,10 +204,9 @@ export async function POST(request: Request) {
           system: systemPrompt({ requestHints, supportsTools }),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            isReasoningModel && !supportsTools
-              ? []
-              : ["analyzeConfig", "scanGithubRepo"],
+          experimental_activeTools: supportsTools
+            ? ["analyzeConfig", "scanGithubRepo"]
+            : [],
           providerOptions: {
             ...(modelConfig?.gatewayOrder && {
               gateway: { order: modelConfig.gatewayOrder },
