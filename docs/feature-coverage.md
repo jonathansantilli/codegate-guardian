@@ -29,13 +29,13 @@ already covers it).
 | 7 | Chat title autogeneration | ❌ | none | Phase 5 |
 | 8 | Per-user hourly message cap | ❌ | none | Phase 5 |
 | 9 | Per-IP rate limit | ❌ | none | Phase 8 |
-| 10 | List chats with cursor pagination (tie behavior) | ❌ | none | Phase 1 (this phase — stable behavior) |
-| 11 | Delete chat (cascades) | ❌ | none | Phase 5 |
-| 12 | Delete all chats for user | ❌ | none | Phase 5 |
-| 13 | Update chat visibility | ❌ | none | Phase 5 |
-| 14 | Update chat title (manual) | ❌ | none | Phase 5 |
-| 15 | Message voting | ❌ | none | Phase 5 |
-| 16 | Edit / retry (delete messages after ts) | ❌ | none | Phase 5 |
+| 10 | List chats with cursor pagination (tie behavior) | 🟡 | `tests/integration/chats-pagination.test.ts` (tie-quirk) + `tests/integration/chat-repository.test.ts` (pagination semantics) | Phase 5 adds E2E over the use case |
+| 11 | Delete chat (cascades) | 🟡 | `tests/integration/chat-repository.test.ts` "deleteById removes one" | Phase 5 adds E2E |
+| 12 | Delete all chats for user | 🟡 | `tests/integration/chat-repository.test.ts` "deleteAllForUser" | Phase 5 adds E2E |
+| 13 | Update chat visibility | 🟡 | `tests/integration/chat-repository.test.ts` "updateVisibility flips to public" | Phase 5 adds E2E |
+| 14 | Update chat title (manual) | 🟡 | `tests/integration/chat-repository.test.ts` "updateTitle" | Phase 5 adds E2E |
+| 15 | Message voting | 🟡 | `tests/integration/vote-stream-repository.test.ts` (cast + flip) | Phase 5 adds E2E |
+| 16 | Edit / retry (delete messages after ts) | 🟡 | `tests/integration/message-repository.test.ts` "deleteAfter" | Phase 5 adds E2E |
 | 17 | Slash commands | ❌ | none | Phase 1 (stable UI) |
 | 18 | Visibility selector | ❌ | none | Phase 5 (paired with use case #13) |
 | 19 | Suggested actions | ✅ | `tests/e2e/api.test.ts` "suggested actions are clickable" | — |
