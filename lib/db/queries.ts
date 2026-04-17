@@ -35,6 +35,7 @@ import { DrizzleStreamRepository } from "@/src/infrastructure/persistence/drizzl
 import { DrizzleSuggestionRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/suggestion-repository";
 import { DrizzleUserRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/user-repository";
 import { DrizzleVoteRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/vote-repository";
+import { DrizzleUnitOfWork } from "@/src/infrastructure/persistence/drizzle-postgres/unit-of-work";
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
 import {
@@ -68,6 +69,7 @@ const voteRepository = new DrizzleVoteRepository(db);
 const streamRepository = new DrizzleStreamRepository(db);
 const documentRepository = new DrizzleDocumentRepository(db);
 const suggestionRepository = new DrizzleSuggestionRepository(db);
+const unitOfWork = new DrizzleUnitOfWork(db);
 
 export async function getUser(email: string): Promise<User[]> {
   try {
@@ -238,61 +240,45 @@ export async function syncScanReportsForMessages({
     let insertedRunsCount = 0;
     let insertedFindingsCount = 0;
 
-    await db.transaction(async (tx) => {
-      const existingRuns = await tx
-        .select({ id: scanRun.id })
-        .from(scanRun)
-        .where(inArray(scanRun.messageId, uniqueMessageIds));
-
-      const existingRunIds = existingRuns.map((current) => current.id);
-
+    await unitOfWork.run(async (repos) => {
+      const existingRunIds = await repos.scanRuns.findIdsByMessageIds(
+        uniqueMessageIds
+      );
       if (existingRunIds.length > 0) {
-        await tx
-          .delete(scanFinding)
-          .where(inArray(scanFinding.scanRunId, existingRunIds));
+        await repos.scanFindings.deleteByScanRunIds(existingRunIds);
       }
-
-      await tx
-        .delete(scanRun)
-        .where(inArray(scanRun.messageId, uniqueMessageIds));
+      await repos.scanRuns.deleteByMessageIds(uniqueMessageIds);
 
       if (normalizedRuns.length === 0) {
         return;
       }
 
-      const insertedRuns = await tx
-        .insert(scanRun)
-        .values(
-          normalizedRuns.map((currentRun) => {
-            const normalizedScanMode: "repository" | "skills" | null =
-              currentRun.scanMode === "repository" ||
-              currentRun.scanMode === "skills"
-                ? currentRun.scanMode
-                : null;
+      const insertedRuns = await repos.scanRuns.saveMany(
+        normalizedRuns.map((currentRun) => {
+          const normalizedScanMode: "repository" | "skills" | null =
+            currentRun.scanMode === "repository" ||
+            currentRun.scanMode === "skills"
+              ? currentRun.scanMode
+              : null;
 
-            return {
-              chatId: currentRun.chatId,
-              messageId: currentRun.messageId,
-              toolCallId: currentRun.toolCallId,
-              toolName: currentRun.toolName,
-              mode: currentRun.mode,
-              scanMode: normalizedScanMode,
-              repositoryUrl: currentRun.repositoryUrl,
-              selectedSkill: currentRun.selectedSkill,
-              guessedPath: currentRun.guessedPath,
-              findingsTotal: currentRun.findingsTotal,
-              summaryBySeverity: currentRun.summaryBySeverity,
-              rawOutput: currentRun.rawOutput,
-              rawReport: currentRun.rawReport,
-              createdAt: currentRun.createdAt,
-            };
-          })
-        )
-        .returning({
-          id: scanRun.id,
-          messageId: scanRun.messageId,
-          toolCallId: scanRun.toolCallId,
-        });
+          return {
+            chatId: currentRun.chatId,
+            messageId: currentRun.messageId,
+            toolCallId: currentRun.toolCallId,
+            toolName: currentRun.toolName,
+            mode: currentRun.mode,
+            scanMode: normalizedScanMode,
+            repositoryUrl: currentRun.repositoryUrl,
+            selectedSkill: currentRun.selectedSkill,
+            guessedPath: currentRun.guessedPath,
+            findingsTotal: currentRun.findingsTotal,
+            summaryBySeverity: currentRun.summaryBySeverity,
+            rawOutput: currentRun.rawOutput,
+            rawReport: currentRun.rawReport,
+            createdAt: currentRun.createdAt,
+          };
+        })
+      );
 
       insertedRunsCount = insertedRuns.length;
 
@@ -307,11 +293,9 @@ export async function syncScanReportsForMessages({
         const scanRunId = runIdByMessageAndToolCall.get(
           `${currentRun.messageId}:${currentRun.toolCallId}`
         );
-
         if (!scanRunId) {
           return [];
         }
-
         return currentRun.findings.map((finding) => ({
           scanRunId,
           findingId: finding.findingId,
@@ -333,7 +317,7 @@ export async function syncScanReportsForMessages({
 
       if (findingRows.length > 0) {
         insertedFindingsCount = findingRows.length;
-        await tx.insert(scanFinding).values(findingRows);
+        await repos.scanFindings.saveMany(findingRows);
       }
     });
 

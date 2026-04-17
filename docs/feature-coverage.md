@@ -48,7 +48,7 @@ already covers it).
 |---|---|---|---|---|
 | 22 | Tool `analyzeConfig` | ✅ | `tests/unit/analyze-config.test.ts` + `tests/unit/codegate-cli.test.ts` | Phase 10 adds adapter integration test |
 | 23 | Tool `scanGithubRepo` + skill flow | ✅ | `tests/unit/scan-github-repo.test.ts` | Phase 10 integration |
-| 24 | Scan run + finding persistence | ❌ | none | Phase 3c |
+| 24 | Scan run + finding persistence | 🟡 | `tests/integration/scan-repositories-unit-of-work.test.ts` (transactional commit, rollback on error, delete-then-save atomicity) | Phase 5 adds E2E over the use case |
 | 25 | Reporting overview | ✅ | `tests/unit/reporting-overview.test.ts` | Phase 2 (domain) |
 | 26 | Finding detail | ✅ | `tests/unit/report-finding-detail.test.ts` | Phase 2 (domain) |
 | 27 | Hackathon mode | ✅ | `tests/unit/hackathon-mode.test.ts` | — |
