@@ -27,9 +27,12 @@ import {
   type ReportingOverview,
   type ReportSeverity,
 } from "@/lib/security/reporting-overview";
+import { DocumentNotFoundError } from "@/src/application/ports/persistence/document-repository";
 import { DrizzleChatRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/chat-repository";
+import { DrizzleDocumentRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/document-repository";
 import { DrizzleMessageRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/message-repository";
 import { DrizzleStreamRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/stream-repository";
+import { DrizzleSuggestionRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/suggestion-repository";
 import { DrizzleUserRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/user-repository";
 import { DrizzleVoteRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/vote-repository";
 import { ChatbotError } from "../errors";
@@ -63,6 +66,8 @@ const chatRepository = new DrizzleChatRepository(db);
 const messageRepository = new DrizzleMessageRepository(db);
 const voteRepository = new DrizzleVoteRepository(db);
 const streamRepository = new DrizzleStreamRepository(db);
+const documentRepository = new DrizzleDocumentRepository(db);
+const suggestionRepository = new DrizzleSuggestionRepository(db);
 
 export async function getUser(email: string): Promise<User[]> {
   try {
@@ -382,17 +387,7 @@ export async function saveDocument({
   userId: string;
 }) {
   try {
-    return await db
-      .insert(document)
-      .values({
-        id,
-        title,
-        kind,
-        content,
-        userId,
-        createdAt: new Date(),
-      })
-      .returning();
+    return await documentRepository.save({ id, title, kind, content, userId });
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to save document");
   }
@@ -406,26 +401,10 @@ export async function updateDocumentContent({
   content: string;
 }) {
   try {
-    const docs = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(desc(document.createdAt))
-      .limit(1);
-
-    const latest = docs[0];
-    if (!latest) {
+    return await documentRepository.updateLatestContent({ id, content });
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError) {
       throw new ChatbotError("not_found:database", "Document not found");
-    }
-
-    return await db
-      .update(document)
-      .set({ content })
-      .where(and(eq(document.id, id), eq(document.createdAt, latest.createdAt)))
-      .returning();
-  } catch (_error) {
-    if (_error instanceof ChatbotError) {
-      throw _error;
     }
     throw new ChatbotError(
       "bad_request:database",
@@ -436,13 +415,7 @@ export async function updateDocumentContent({
 
 export async function getDocumentsById({ id }: { id: string }) {
   try {
-    const documents = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(asc(document.createdAt));
-
-    return documents;
+    return await documentRepository.listVersions(id);
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
@@ -453,13 +426,8 @@ export async function getDocumentsById({ id }: { id: string }) {
 
 export async function getDocumentById({ id }: { id: string }) {
   try {
-    const [selectedDocument] = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(desc(document.createdAt));
-
-    return selectedDocument;
+    const latest = await documentRepository.getLatest(id);
+    return latest ?? undefined;
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
@@ -476,19 +444,7 @@ export async function deleteDocumentsByIdAfterTimestamp({
   timestamp: Date;
 }) {
   try {
-    await db
-      .delete(suggestion)
-      .where(
-        and(
-          eq(suggestion.documentId, id),
-          gt(suggestion.documentCreatedAt, timestamp)
-        )
-      );
-
-    return await db
-      .delete(document)
-      .where(and(eq(document.id, id), gt(document.createdAt, timestamp)))
-      .returning();
+    return await documentRepository.deleteAfter({ id, timestamp });
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
@@ -503,7 +459,7 @@ export async function saveSuggestions({
   suggestions: Suggestion[];
 }) {
   try {
-    return await db.insert(suggestion).values(suggestions);
+    await suggestionRepository.save(suggestions);
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
@@ -518,10 +474,7 @@ export async function getSuggestionsByDocumentId({
   documentId: string;
 }) {
   try {
-    return await db
-      .select()
-      .from(suggestion)
-      .where(eq(suggestion.documentId, documentId));
+    return await suggestionRepository.listByDocumentId(documentId);
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",

@@ -66,12 +66,12 @@ already covers it).
 | 34 | Artifact document — sheet | ❌ | none | Phase 5 |
 | 35 | Artifact document — image (dead code?) | ❌ | none | Phase 13 (decision: delete if unused) |
 | 36 | Document streaming context | ❌ | none | Phase 5 |
-| 37 | Save document | ❌ | none | Phase 5 |
-| 38 | Update document content | ❌ | none | Phase 5 |
-| 39 | List document versions | ❌ | none | Phase 5 |
-| 40 | Delete document versions after ts | ❌ | none | Phase 5 |
-| 41 | Save suggestions | ❌ | none | Phase 5 |
-| 42 | List suggestions | ❌ | none | Phase 5 |
+| 37 | Save document | 🟡 | `tests/integration/artifact-repository.test.ts` "save called twice" | Phase 5 adds E2E |
+| 38 | Update document content | 🟡 | `tests/integration/artifact-repository.test.ts` "updateLatestContent" + missing-doc rejection | Phase 5 adds E2E |
+| 39 | List document versions | 🟡 | `tests/integration/artifact-repository.test.ts` "listVersions" | Phase 5 adds E2E |
+| 40 | Delete document versions after ts | 🟡 | `tests/integration/artifact-repository.test.ts` "deleteAfter cascades to suggestions" | Phase 5 adds E2E |
+| 41 | Save suggestions | 🟡 | `tests/integration/artifact-repository.test.ts` "suggestions save + listByDocumentId" | Phase 5 adds E2E |
+| 42 | List suggestions | 🟡 | `tests/integration/artifact-repository.test.ts` "suggestions save + listByDocumentId" | Phase 5 adds E2E |
 | 43 | `/api/document` route | ❌ | none | Phase 5 |
 | 44 | `/api/suggestions` route | ❌ | none | Phase 5 |
 
