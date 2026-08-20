@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { guestRegex } from "./lib/constants";
 import { isSecureRequest } from "./lib/security/request-protocol";
+import { UPLOADS_ROUTE_PATH } from "./src/shared/routes";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,6 +12,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  // Stored uploads are public, as they were on the previous hosted blob store:
+  // the browser renders them in the transcript and vision models fetch them by
+  // URL, with no session cookie to present. Keys are uuid-prefixed and the
+  // object store rejects anything that could escape its root.
+  if (pathname.startsWith(UPLOADS_ROUTE_PATH)) {
     return NextResponse.next();
   }
 

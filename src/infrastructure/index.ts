@@ -12,7 +12,6 @@ export {
   buildContainer,
   disposeContainer,
   getContainer,
-  UPLOADS_ROUTE_PATH,
 } from "./composition/container";
 export type { Env } from "./composition/env";
 export { loadEnv } from "./composition/env";
