@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { guestRegex } from "./lib/constants";
 import { isSecureRequest } from "./lib/security/request-protocol";
-import { UPLOADS_ROUTE_PATH } from "./src/shared/routes";
+import { AGENT_ROUTE_PREFIX, UPLOADS_ROUTE_PATH } from "./src/shared/routes";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,6 +12,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  // Agents authenticate with a bearer token, not a session cookie. Without
+  // this exemption the session gate would answer a machine check-in with a
+  // redirect to guest sign-in.
+  if (pathname.startsWith(AGENT_ROUTE_PREFIX)) {
     return NextResponse.next();
   }
 

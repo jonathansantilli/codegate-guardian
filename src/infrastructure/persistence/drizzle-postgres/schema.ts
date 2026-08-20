@@ -210,3 +210,82 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+// --- Fleet: machines running the codegate agent -----------------------------
+
+export const host = pgTable(
+  "Host_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    // Agent-generated and stable for the life of the machine. Hostnames are
+    // neither unique across an org nor stable, so they are display data only.
+    machineId: text("machineId").notNull(),
+    hostname: text("hostname").notNull(),
+    platform: text("platform"),
+    osRelease: text("osRelease"),
+    username: text("username"),
+    agentVersion: text("agentVersion"),
+    firstSeenAt: timestamp("firstSeenAt").notNull(),
+    lastSeenAt: timestamp("lastSeenAt").notNull(),
+  },
+  (table) => ({
+    machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),
+    lastSeenIdx: index("Host_v1_last_seen_idx").on(table.lastSeenAt),
+  })
+);
+
+export type Host = InferSelectModel<typeof host>;
+
+export const hostReport = pgTable(
+  "HostReport_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    hostId: uuid("hostId")
+      .notNull()
+      .references(() => host.id, { onDelete: "cascade" }),
+    receivedAt: timestamp("receivedAt").notNull(),
+    collectedAt: timestamp("collectedAt").notNull(),
+    kbVersion: text("kbVersion"),
+    itemsTotal: integer("itemsTotal").notNull().default(0),
+    toolsDetected: json("toolsDetected").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    hostIdx: index("HostReport_v1_host_idx").on(table.hostId),
+    hostReceivedIdx: index("HostReport_v1_host_received_idx").on(
+      table.hostId,
+      table.receivedAt
+    ),
+  })
+);
+
+export type HostReport = InferSelectModel<typeof hostReport>;
+
+export const hostInventoryItem = pgTable(
+  "HostInventoryItem_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    reportId: uuid("reportId")
+      .notNull()
+      .references(() => hostReport.id, { onDelete: "cascade" }),
+    hostId: uuid("hostId")
+      .notNull()
+      .references(() => host.id, { onDelete: "cascade" }),
+    tool: text("tool").notNull(),
+    kind: varchar("kind", { enum: ["config", "skill"] }).notNull(),
+    itemType: text("itemType"),
+    scope: varchar("scope", { enum: ["user", "project"] }).notNull(),
+    pattern: text("pattern"),
+    path: text("path").notNull(),
+    exists: boolean("exists").notNull(),
+    riskSurface: json("riskSurface").notNull(),
+    resolvedAgainst: text("resolvedAgainst"),
+  },
+  (table) => ({
+    reportIdx: index("HostInventoryItem_v1_report_idx").on(table.reportId),
+    hostIdx: index("HostInventoryItem_v1_host_idx").on(table.hostId),
+    toolIdx: index("HostInventoryItem_v1_tool_idx").on(table.tool),
+  })
+);
+
+export type HostInventoryItem = InferSelectModel<typeof hostInventoryItem>;

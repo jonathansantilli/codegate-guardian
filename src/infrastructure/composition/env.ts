@@ -58,6 +58,11 @@ const envSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: optionalNonEmpty,
   GEMINI_API_KEY: optionalNonEmpty,
 
+  // Fleet ingest: shared bearer token every agent presents when reporting.
+  // Absent means the ingest endpoint is closed, so an instance that has not
+  // opted in cannot be written to by an unauthenticated agent.
+  AGENT_INGEST_TOKEN: optionalNonEmpty,
+
   // Telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalNonEmpty,
 
