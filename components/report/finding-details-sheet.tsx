@@ -89,8 +89,8 @@ function formatLocation(location: FindingLocation | null) {
 
   const parts = [
     location.filePath,
-    location.line !== null ? `line ${location.line}` : null,
-    location.column !== null ? `column ${location.column}` : null,
+    location.line === null ? null : `line ${location.line}`,
+    location.column === null ? null : `column ${location.column}`,
     location.field ? `field ${location.field}` : null,
   ].filter(Boolean);
 
@@ -386,6 +386,7 @@ export function FindingDetailsSheet({
                           {data.affectedLocations.map((location, index) => (
                             <p
                               className="rounded bg-black/20 px-2 py-1 font-mono text-[11px] text-muted-foreground leading-relaxed break-words"
+                              // biome-ignore lint/suspicious/noArrayIndexKey: static read-only list; identical locations can repeat, so the index disambiguates.
                               key={`${location.filePath ?? "unknown"}-${index}`}
                             >
                               {formatLocation(location)}

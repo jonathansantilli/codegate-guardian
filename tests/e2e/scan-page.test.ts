@@ -8,7 +8,9 @@ test.describe("Feature: /scan route", () => {
   test("Given an authenticated session, when navigating to /scan, then the page resolves with the chat shell", async ({
     page,
   }) => {
-    const response = await page.goto("/scan", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/scan", {
+      waitUntil: "domcontentloaded",
+    });
     expect(response?.status()).toBeLessThan(500);
     // The input field is part of the shared chat shell; its presence
     // proves the /scan path hit the shell rather than erroring out.

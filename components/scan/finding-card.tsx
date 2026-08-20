@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
@@ -11,7 +12,6 @@ import type {
   ScanSeverity,
 } from "@/lib/security/scan-report-view";
 import { cn } from "@/lib/utils";
-import { ChevronDownIcon } from "lucide-react";
 
 const severityClasses: Record<
   ScanSeverity,

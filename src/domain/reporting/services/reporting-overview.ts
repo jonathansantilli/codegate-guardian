@@ -470,7 +470,10 @@ export function buildReportingOverview({
     if (run.guessedPath) {
       artifactSet.add(run.guessedPath);
       const artifactType = classifyArtifactType(run.guessedPath);
-      artifactTypeMap.set(artifactType, (artifactTypeMap.get(artifactType) ?? 0) + 1);
+      artifactTypeMap.set(
+        artifactType,
+        (artifactTypeMap.get(artifactType) ?? 0) + 1
+      );
     }
 
     if (run.repositoryUrl) {
@@ -565,7 +568,10 @@ export function buildReportingOverview({
     if (finding.filePath) {
       artifactSet.add(finding.filePath);
       const artifactType = classifyArtifactType(finding.filePath);
-      artifactTypeMap.set(artifactType, (artifactTypeMap.get(artifactType) ?? 0) + 1);
+      artifactTypeMap.set(
+        artifactType,
+        (artifactTypeMap.get(artifactType) ?? 0) + 1
+      );
     }
 
     if (finding.repositoryUrl) {
@@ -686,7 +692,8 @@ export function buildReportingOverview({
 
   for (const repo of repositories) {
     const existing = byOwnerMap.get(repo.owner);
-    const sourceBySeverity = repositoryRuns.get(repo.repositoryUrl)?.bySeverity ??
+    const sourceBySeverity =
+      repositoryRuns.get(repo.repositoryUrl)?.bySeverity ??
       createZeroedSeverityCounts();
 
     if (existing) {
@@ -694,7 +701,9 @@ export function buildReportingOverview({
       existing.findings += repo.findings;
       existing.critical += repo.critical;
       existing.high += repo.high;
-      for (const severity of Object.keys(sourceBySeverity) as ReportSeverity[]) {
+      for (const severity of Object.keys(
+        sourceBySeverity
+      ) as ReportSeverity[]) {
         existing.bySeverity[severity] += sourceBySeverity[severity];
       }
     } else {
@@ -727,7 +736,8 @@ export function buildReportingOverview({
     });
 
   const byRepository = repositories.map((repo) => {
-    const repoBySeverity = repositoryRuns.get(repo.repositoryUrl)?.bySeverity ??
+    const repoBySeverity =
+      repositoryRuns.get(repo.repositoryUrl)?.bySeverity ??
       createZeroedSeverityCounts();
 
     return {
@@ -766,7 +776,8 @@ export function buildReportingOverview({
 
   const topFindings = [...findings]
     .sort((left, right) => {
-      const severityDelta = severityRank[left.severity] - severityRank[right.severity];
+      const severityDelta =
+        severityRank[left.severity] - severityRank[right.severity];
       if (severityDelta !== 0) {
         return severityDelta;
       }

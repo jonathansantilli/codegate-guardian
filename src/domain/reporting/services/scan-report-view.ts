@@ -149,7 +149,8 @@ function normalizeFindings(report: Record<string, unknown>) {
 
   findings.sort((left, right) => {
     const severityDelta =
-      severityOrder.indexOf(left.severity) - severityOrder.indexOf(right.severity);
+      severityOrder.indexOf(left.severity) -
+      severityOrder.indexOf(right.severity);
 
     if (severityDelta !== 0) {
       return severityDelta;

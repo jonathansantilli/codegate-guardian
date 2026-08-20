@@ -12,6 +12,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
+import { ScanReport } from "../scan/scan-report";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -19,7 +20,6 @@ import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
-import { ScanReport } from "../scan/scan-report";
 import { Weather } from "./weather";
 
 const PurePreviewMessage = ({

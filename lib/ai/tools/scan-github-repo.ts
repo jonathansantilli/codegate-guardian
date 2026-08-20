@@ -10,9 +10,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { tool } from "ai";
 import * as git from "isomorphic-git";
 import http from "isomorphic-git/http/node";
-import { tool } from "ai";
 import { z } from "zod";
 import {
   buildCodegateScanNpxArgs,
@@ -316,7 +316,9 @@ function asString(value: unknown): string | null {
 }
 
 function mergeCodegateReports(reports: CodegateReport[]) {
-  const normalizedReports = reports.map((report) => asRecord(report)).filter(Boolean);
+  const normalizedReports = reports
+    .map((report) => asRecord(report))
+    .filter(Boolean);
 
   const baseReport = normalizedReports[0];
   if (!baseReport) {

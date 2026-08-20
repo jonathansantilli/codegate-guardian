@@ -30,9 +30,7 @@ function renderPartsToText(
     } else if (part.type === "reasoning") {
       chunks.push(part.text);
     } else if (part.type === "tool-call") {
-      chunks.push(
-        `[tool-call ${part.toolName} ${JSON.stringify(part.input)}]`
-      );
+      chunks.push(`[tool-call ${part.toolName} ${JSON.stringify(part.input)}]`);
     } else if (part.type === "tool-result") {
       chunks.push(`[tool-result ${part.toolName}]`);
     } else if (part.type === "file") {
@@ -65,7 +63,8 @@ function flattenPrompt(prompt: LanguageModelV2Prompt): FlattenedPrompt {
   }
 
   return {
-    systemPrompt: systemChunks.length > 0 ? systemChunks.join("\n\n") : undefined,
+    systemPrompt:
+      systemChunks.length > 0 ? systemChunks.join("\n\n") : undefined,
     userPrompt: conversation.join("\n\n"),
   };
 }
@@ -221,10 +220,8 @@ function processStreamEvent(
     }
   }
 
-  if (event.type === "message_stop") {
-    if (event.message?.usage) {
-      acc.usage = event.message.usage;
-    }
+  if (event.type === "message_stop" && event.message?.usage) {
+    acc.usage = event.message.usage;
   }
 }
 
@@ -268,7 +265,7 @@ export function createClaudeCodeLocalModel(modelId: string): LanguageModelV2 {
           if (message.subtype !== "success") {
             throw new Error(
               message.subtype === "error_during_execution"
-                ? message.errors?.[0] ?? "Claude Code session failed"
+                ? (message.errors?.[0] ?? "Claude Code session failed")
                 : `Claude Code session failed: ${message.subtype}`
             );
           }
@@ -364,7 +361,7 @@ export function createClaudeCodeLocalModel(modelId: string): LanguageModelV2 {
                     type: "error",
                     error: new Error(
                       message.subtype === "error_during_execution"
-                        ? message.errors?.[0] ?? "Claude Code session failed"
+                        ? (message.errors?.[0] ?? "Claude Code session failed")
                         : `Claude Code session failed: ${message.subtype}`
                     ),
                   });

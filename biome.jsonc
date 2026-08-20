@@ -30,10 +30,12 @@
       "style": {
         "noMagicNumbers": "off",
         "noNestedTernary": "off",
-        "useConsistentTypeDefinitions": "off"
+        "useConsistentTypeDefinitions": "off",
+        "useBlockStatements": "off",
+        "noParameterProperties": "off",
+        "useConsistentMemberAccessibility": "off"
       },
       "nursery": {
-        "noUnnecessaryConditions": "off",
         "useSortedClasses": "off"
       },
       "complexity": {
@@ -49,7 +51,8 @@
       },
       "performance": {
         "noBarrelFile": "off",
-        "useTopLevelRegex": "off"
+        "useTopLevelRegex": "off",
+        "noNamespaceImport": "off"
       }
     }
   },
@@ -82,10 +85,7 @@
       }
     },
     {
-      "includes": [
-        "src/application/**/*.ts",
-        "src/application/**/*.tsx"
-      ],
+      "includes": ["src/application/**/*.ts", "src/application/**/*.tsx"],
       "linter": {
         "rules": {
           "style": {

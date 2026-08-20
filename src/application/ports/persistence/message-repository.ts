@@ -24,8 +24,6 @@ export type MessageRepository = {
   update(input: UpdateMessageInput): Promise<void>;
   listByChat(chatId: string): Promise<Message[]>;
   findById(id: string): Promise<Message[]>;
-  countRecentUserMessages(
-    input: CountRecentUserMessagesInput
-  ): Promise<number>;
+  countRecentUserMessages(input: CountRecentUserMessagesInput): Promise<number>;
   deleteAfter(input: DeleteMessagesAfterInput): Promise<void>;
 };

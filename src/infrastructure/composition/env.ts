@@ -75,7 +75,9 @@ export type Env = z.infer<typeof envSchema>;
 export class EnvValidationError extends Error {
   constructor(public readonly issues: z.ZodIssue[]) {
     const summary = issues
-      .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .map(
+        (issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`
+      )
       .join("\n");
     super(`Environment validation failed:\n${summary}`);
     this.name = "EnvValidationError";

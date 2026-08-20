@@ -1,17 +1,6 @@
 import "server-only";
 
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  gte,
-  inArray,
-  lt,
-  type SQL,
-} from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/chat/artifact";
@@ -39,19 +28,12 @@ import { DrizzleUnitOfWork } from "@/src/infrastructure/persistence/drizzle-post
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
 import {
-  type Chat,
   chat,
   type DBMessage,
-  document,
-  message,
   type Suggestion,
   scanFinding,
   scanRun,
-  stream,
-  suggestion,
   type User,
-  user,
-  vote,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -241,9 +223,8 @@ export async function syncScanReportsForMessages({
     let insertedFindingsCount = 0;
 
     await unitOfWork.run(async (repos) => {
-      const existingRunIds = await repos.scanRuns.findIdsByMessageIds(
-        uniqueMessageIds
-      );
+      const existingRunIds =
+        await repos.scanRuns.findIdsByMessageIds(uniqueMessageIds);
       if (existingRunIds.length > 0) {
         await repos.scanFindings.deleteByScanRunIds(existingRunIds);
       }

@@ -26,6 +26,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +37,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { cn } from "@/lib/utils";
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const pathname = usePathname();
@@ -65,9 +65,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         <SidebarHeader className="pb-0 pt-3">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarTrigger
-                className="text-sidebar-foreground/60 transition-colors duration-150 hover:text-sidebar-foreground"
-              />
+              <SidebarTrigger className="text-sidebar-foreground/60 transition-colors duration-150 hover:text-sidebar-foreground" />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>

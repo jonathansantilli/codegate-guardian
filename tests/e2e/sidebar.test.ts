@@ -12,6 +12,7 @@ test.describe("Feature: sidebar toggle persists across reloads", () => {
     // Default: the sidebar cookie is either absent or 'true'. Toggle it.
     const toggle = page.getByTestId("sidebar-toggle");
     if (!(await toggle.isVisible().catch(() => false))) {
+      // biome-ignore lint/suspicious/noSkippedTests: deliberate conditional skip when this layout doesn't render the toggle.
       test.skip(true, "sidebar-toggle testid not rendered in this layout");
     }
     await toggle.click();

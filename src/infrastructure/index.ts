@@ -3,7 +3,12 @@
 // telemetry, logger, auth, HTTP, middleware, composition.
 //
 // Only the composition root is imported from outside this layer.
-export { buildContainer, getContainer, disposeContainer } from "./composition/container";
+
 export type { ApplicationContainer } from "./composition/container";
-export { loadEnv } from "./composition/env";
+export {
+  buildContainer,
+  disposeContainer,
+  getContainer,
+} from "./composition/container";
 export type { Env } from "./composition/env";
+export { loadEnv } from "./composition/env";
