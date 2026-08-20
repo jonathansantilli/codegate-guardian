@@ -8,11 +8,25 @@ const booleanFromString = z
     return normalized === "1" || normalized === "true" || normalized === "yes";
   });
 
+// An env var set to an empty string means "not configured" everywhere it
+// matters — `docker compose` writes `${VAR:-}` as "", Kubernetes does the same
+// for an absent secret key, and `VAR=` in a .env file is indistinguishable from
+// omitting the line. Treat all of those as undefined rather than as an error.
 const optionalNonEmpty = z
   .string()
   .transform((value) => value.trim())
-  .refine((value) => value.length > 0, { message: "must be non-empty" })
+  .transform((value) => (value.length > 0 ? value : undefined))
   .optional();
+
+// Same rule for variables that carry a default: an empty value falls back to
+// the default instead of overriding it with "".
+function stringWithDefault(fallback: string) {
+  return z
+    .string()
+    .transform((value) => value.trim())
+    .transform((value) => (value.length > 0 ? value : fallback))
+    .default(fallback);
+}
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -28,7 +42,7 @@ const envSchema = z.object({
 
   // Absolute base URL this instance is reached at. Used for page metadata and
   // for building fetchable URLs for locally stored uploads.
-  APP_URL: z.string().default("http://localhost:3000"),
+  APP_URL: stringWithDefault("http://localhost:3000"),
 
   // Demo / basePath behavior (A4 acceptance)
   IS_DEMO: booleanFromString.default(false),
@@ -62,11 +76,11 @@ const envSchema = z.object({
   LOGGER_DRIVER: z.enum(["console", "otel"]).default("console"),
 
   // Filesystem object store
-  OBJECT_STORE_PATH: z.string().default("./data/uploads"),
+  OBJECT_STORE_PATH: stringWithDefault("./data/uploads"),
 
   // S3 / MinIO configuration (required when OBJECT_STORE_DRIVER=s3)
   S3_ENDPOINT: optionalNonEmpty,
-  S3_REGION: z.string().default("us-east-1"),
+  S3_REGION: stringWithDefault("us-east-1"),
   S3_BUCKET: optionalNonEmpty,
   S3_ACCESS_KEY_ID: optionalNonEmpty,
   S3_SECRET_ACCESS_KEY: optionalNonEmpty,

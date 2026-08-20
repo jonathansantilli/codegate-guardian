@@ -39,41 +39,87 @@ No `--deep` mode is used.
 ## Tech Stack
 
 - Next.js App Router + React 19
-- Vercel AI SDK for model/tool orchestration
+- AI SDK for model/tool orchestration, calling Google Gemini directly
 - CodeGate scanner (`codegate-ai`)
 - Drizzle ORM + Postgres
 - Auth.js session/auth foundation
-- Vercel Blob (file storage) and optional Redis stream support
+- Object storage on the local filesystem or any S3-compatible endpoint
+- Optional Redis for resumable streams and IP rate limiting
+
+The stack is fully self-hosted: no managed platform, no vendor SDKs, and no
+outbound calls beyond your database, your object store, and the model provider.
+
+## Quick Start with Docker
+
+The bundled stack runs the app, Postgres, Redis, and MinIO together. It is the
+fastest way to a working instance and the reference for a production setup.
+
+```bash
+cp .env.example .env
+# Set AUTH_SECRET and a Gemini key in .env:
+#   openssl rand -base64 32
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+The app is served at [http://localhost:3000](http://localhost:3000). MinIO's
+console is at [http://localhost:9001](http://localhost:9001)
+(`minioadmin` / `minioadmin`).
+
+Migrations run automatically: a one-shot `migrate` service applies them before
+the app starts, and the app waits for it to finish.
+
+```bash
+docker compose -f docker/docker-compose.yml logs -f app   # follow logs
+docker compose -f docker/docker-compose.yml down          # stop
+docker compose -f docker/docker-compose.yml down -v       # stop and drop data
+```
+
+Only `AUTH_SECRET` is mandatory — compose refuses to start without it. Add a
+Gemini key to actually run scans through a model. Everything else has a working
+default.
+
+### Behind a reverse proxy
+
+Set `APP_URL` to the public origin and have the proxy forward
+`X-Forwarded-Proto` and `X-Forwarded-For`. The session cookie and the rate
+limiter both read those headers, so TLS termination works without further
+configuration.
 
 ## Prerequisites
+
+Running with Docker needs only Docker with Compose v2. To develop against the
+source you also need:
 
 - Node.js 20+
 - pnpm 10+
 - A Postgres database
-- Vercel project (recommended for deployment parity)
 
 ## Environment Variables
 
-Copy `.env.example` to `.env.local` and set values.
+Copy `.env.example` to `.env.local` for local development, or to `.env` for the
+Docker stack. Every variable is documented there; a variable set to an empty
+string is treated as unset.
 
-Required for most local development:
+Required:
 
-- `AUTH_SECRET`
+- `AUTH_SECRET` — session signing key (`openssl rand -base64 32`)
 - `POSTGRES_URL`
 
-Required if you use AI Gateway outside Vercel:
+Model provider (needed for any scan that calls a model):
 
-- `AI_GATEWAY_API_KEY`
-
-Gemini direct-key mode (recommended for Google models in local dev):
-
-- `GOOGLE_GENERATIVE_AI_API_KEY` or `GEMINI_API_KEY`
+- `GOOGLE_GENERATIVE_AI_API_KEY`, or `GEMINI_API_KEY`
 
 Optional:
 
-- `BLOB_READ_WRITE_TOKEN` (file/blob features)
-- `REDIS_URL` (resumable stream behavior)
-- `HACKATHON_MODE=true` (shared/global reporting view across guest sessions)
+- `APP_URL` — public origin, used for page metadata and upload URLs
+  (default `http://localhost:3000`)
+- `REDIS_URL` — enables resumable streams and IP rate limiting
+- `OBJECT_STORE_DRIVER` — `filesystem` (default) or `s3`
+- `OBJECT_STORE_PATH` — where the filesystem driver writes
+  (default `./data/uploads`)
+- `S3_*` — endpoint, bucket, and credentials, required when the driver is `s3`
+- `HACKATHON_MODE=true` — shared/global reporting view across guest sessions
+- `ENABLE_LOCAL_CLI_MODELS=true` — expose locally installed CLI agents as models
 
 ## Local Development
 
@@ -83,16 +129,27 @@ pnpm db:migrate
 pnpm dev
 ```
 
-App runs at [http://localhost:3000](http://localhost:3000).
+App runs at [http://localhost:3000](http://localhost:3000). Uploads land in
+`./data/uploads` and are served back at `/api/uploads`, so no object storage
+service is needed for day-to-day work.
+
+To run only the backing services in Docker and the app on the host:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d postgres redis
+```
 
 ## Development Commands
 
 - `pnpm dev` - start local dev server
-- `pnpm build` - run DB migration + production build
+- `pnpm build` - production build (migrations run separately)
 - `pnpm start` - run production build output
 - `pnpm check` - run code quality checks (`ultracite check`)
 - `pnpm fix` - auto-fix style/lint issues (`ultracite fix`)
-- `pnpm test` - run Playwright E2E suite
+- `pnpm test` - run the full suite (unit, integration, E2E)
+- `pnpm test:unit` - unit tests only
+- `pnpm test:integration` - integration tests (requires Docker for testcontainers)
+- `pnpm test:e2e` - Playwright E2E suite
 
 Database utilities:
 
@@ -104,42 +161,35 @@ Database utilities:
 - `pnpm db:check`
 - `pnpm db:up`
 
-Useful targeted test commands:
+## Building the Image Directly
 
 ```bash
-# Unit tests
-pnpm exec tsx --test tests/unit/*.test.ts
-
-# Example: scan flow tests only
-pnpm exec tsx --test tests/unit/scan-github-repo.test.ts
+docker build -f docker/Dockerfile -t codegate-guardian .
+docker run --rm -p 3000:3000 \
+  -e AUTH_SECRET="$(openssl rand -base64 32)" \
+  -e POSTGRES_URL="postgresql://user:pass@host:5432/db" \
+  -e GOOGLE_GENERATIVE_AI_API_KEY="..." \
+  -v guardian_uploads:/app/data/uploads \
+  codegate-guardian
 ```
 
-## Deploy to Vercel
-
-Option 1 (recommended script):
+Apply migrations with the `migrate` target of the same Dockerfile:
 
 ```bash
-pnpm deploy:prod
+docker build -f docker/Dockerfile --target migrate -t codegate-guardian-migrate .
+docker run --rm -e POSTGRES_URL="postgresql://user:pass@host:5432/db" \
+  codegate-guardian-migrate
 ```
-
-Option 2 (manual):
-
-```bash
-pnpm dlx vercel --prod --yes
-```
-
-Before deployment:
-
-1. Ensure all required env vars are set in Vercel Project Settings.
-2. Ensure AI Gateway is enabled if you are routing through gateway models.
-3. Confirm database connectivity from Vercel runtime.
 
 ## Model Routing Notes
 
-- Default model is `google/gemini-2.5-pro`.
-- If `GOOGLE_GENERATIVE_AI_API_KEY` (or `GEMINI_API_KEY`) is present, Google
-  models use direct Gemini provider.
-- Otherwise, models are routed through AI Gateway.
+- Default model is `google/gemini-2.5-pro`; `google/gemini-2.5-flash` is also
+  available and is used for session titles.
+- Models are called directly through `@ai-sdk/google`. Set
+  `GOOGLE_GENERATIVE_AI_API_KEY` or `GEMINI_API_KEY`; without one, model calls
+  fail with an explicit error rather than falling back to a hosted gateway.
+- Setting `ENABLE_LOCAL_CLI_MODELS=true` additionally exposes locally installed
+  `claude-code/*` and `codex/*` CLI agents as models.
 
 ## Project Intent
 

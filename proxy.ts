@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
+import { guestRegex } from "./lib/constants";
+import { isSecureRequest } from "./lib/security/request-protocol";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,10 +14,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Must match the scheme Auth.js used when it wrote the cookie, not the
+  // build mode: a self-hosted instance runs NODE_ENV=production over plain
+  // HTTP, where the session cookie carries no __Secure- prefix.
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
+    secureCookie: isSecureRequest(request),
   });
 
   const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
