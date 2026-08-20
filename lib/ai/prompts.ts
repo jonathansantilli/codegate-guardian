@@ -1,4 +1,3 @@
-import type { Geo } from "@vercel/functions";
 import type { ArtifactKind } from "@/components/chat/artifact";
 
 export const artifactsPrompt = `
@@ -72,36 +71,7 @@ Critical behavior:
 - Do not drift into generic productivity/chat behavior.
 `;
 
-export type RequestHints = {
-  latitude: Geo["latitude"];
-  longitude: Geo["longitude"];
-  city: Geo["city"];
-  country: Geo["country"];
-};
-
-export const getRequestPromptFromHints = (requestHints: RequestHints) => `\
-About the origin of user's request:
-- lat: ${requestHints.latitude}
-- lon: ${requestHints.longitude}
-- city: ${requestHints.city}
-- country: ${requestHints.country}
-`;
-
-export const systemPrompt = ({
-  requestHints,
-  supportsTools,
-}: {
-  requestHints: RequestHints;
-  supportsTools: boolean;
-}) => {
-  const requestPrompt = getRequestPromptFromHints(requestHints);
-
-  if (!supportsTools) {
-    return `${codegateGuardianPrompt}\n\n${requestPrompt}`;
-  }
-
-  return `${codegateGuardianPrompt}\n\n${requestPrompt}`;
-};
+export const systemPrompt = () => codegateGuardianPrompt;
 
 export const codePrompt = `
 You are a code generator that creates self-contained, executable code snippets. When writing code:

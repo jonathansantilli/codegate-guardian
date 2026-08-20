@@ -1,4 +1,3 @@
-import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 const basePath = process.env.IS_DEMO === "1" ? "/demo" : "";
@@ -21,6 +20,8 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
+  // Emits a self-contained server bundle for the Docker runtime image.
+  output: "standalone",
   cacheComponents: true,
   devIndicators: false,
   poweredByHeader: false,
@@ -32,15 +33,10 @@ const nextConfig: NextConfig = {
     incomingRequests: false,
   },
   images: {
-    remotePatterns: [
-      {
-        hostname: "avatar.vercel.sh",
-      },
-      {
-        protocol: "https",
-        hostname: "*.public.blob.vercel-storage.com",
-      },
-    ],
+    // Self-hosted deployments serve uploads from the configured object store
+    // (local filesystem or any S3-compatible endpoint), so the host is not
+    // known at build time and the optimizer is bypassed.
+    unoptimized: true,
   },
   serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
   experimental: {
@@ -52,4 +48,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withBotId(nextConfig);
+export default nextConfig;
