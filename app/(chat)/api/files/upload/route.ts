@@ -1,16 +1,21 @@
-import { put } from "@vercel/blob";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
+import { buildObjectKey } from "@/src/domain/storage/object-key";
+import { getContainer } from "@/src/infrastructure";
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png"];
 
 const FileSchema = z.object({
   file: z
     .instanceof(Blob)
-    .refine((file) => file.size <= 5 * 1024 * 1024, {
+    .refine((file) => file.size <= MAX_FILE_SIZE_BYTES, {
       message: "File size should be less than 5MB",
     })
-    .refine((file) => ["image/jpeg", "image/png"].includes(file.type), {
+    .refine((file) => ALLOWED_CONTENT_TYPES.includes(file.type), {
       message: "File type should be JPEG or PNG",
     }),
 });
@@ -28,33 +33,36 @@ export async function POST(request: Request) {
 
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as Blob;
+    const file = formData.get("file");
 
-    if (!file) {
+    if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
     const validatedFile = FileSchema.safeParse({ file });
 
     if (!validatedFile.success) {
-      const errorMessage = validatedFile.error.errors
-        .map((error) => error.message)
+      const errorMessage = validatedFile.error.issues
+        .map((issue) => issue.message)
         .join(", ");
 
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
-    const filename = (formData.get("file") as File).name;
-    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const fileBuffer = await file.arrayBuffer();
+    const fileName = file instanceof File ? file.name : "upload";
+    const key = buildObjectKey({ fileName, id: randomUUID() });
+    const body = new Uint8Array(await file.arrayBuffer());
 
     try {
-      const data = await put(`${safeName}`, fileBuffer, {
-        access: "public",
+      const stored = await getContainer().ports.objectStore.put({
+        key,
+        body,
+        contentType: file.type,
       });
 
-      return NextResponse.json(data);
-    } catch (_error) {
+      return NextResponse.json(stored);
+    } catch (error) {
+      console.error("Upload failed:", error);
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
   } catch (_error) {

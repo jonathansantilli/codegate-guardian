@@ -4,11 +4,15 @@
 //
 // Only the composition root is imported from outside this layer.
 
-export type { ApplicationContainer } from "./composition/container";
+export type {
+  ApplicationContainer,
+  ApplicationPorts,
+} from "./composition/container";
 export {
   buildContainer,
   disposeContainer,
   getContainer,
+  UPLOADS_ROUTE_PATH,
 } from "./composition/container";
 export type { Env } from "./composition/env";
 export { loadEnv } from "./composition/env";
