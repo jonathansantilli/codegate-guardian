@@ -35,7 +35,9 @@ test.describe("Chat Page", () => {
     await expect(page.getByTestId("send-button")).toBeVisible();
   });
 
-  test("suggested actions are scan-oriented on empty chat", async ({ page }) => {
+  test("suggested actions are scan-oriented on empty chat", async ({
+    page,
+  }) => {
     await page.goto("/");
     const suggestions = page.locator("[data-testid='suggested-actions']");
     await expect(suggestions).toBeVisible();

@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { resolveThemeColor } from "@/lib/theme-color";
 
 function ensureThemeColorMeta() {
-  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  let meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]'
+  );
 
   if (!meta) {
     meta = document.createElement("meta");

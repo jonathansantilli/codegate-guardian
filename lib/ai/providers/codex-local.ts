@@ -26,9 +26,7 @@ function renderPartsToText(
     if (part.type === "text" || part.type === "reasoning") {
       chunks.push(part.text);
     } else if (part.type === "tool-call") {
-      chunks.push(
-        `[tool-call ${part.toolName} ${JSON.stringify(part.input)}]`
-      );
+      chunks.push(`[tool-call ${part.toolName} ${JSON.stringify(part.input)}]`);
     } else if (part.type === "tool-result") {
       chunks.push(`[tool-result ${part.toolName}]`);
     } else if (part.type === "file") {
@@ -58,9 +56,8 @@ function flattenPrompt(prompt: LanguageModelV2Prompt): string {
     }
   }
 
-  const system = systemChunks.length > 0
-    ? `System:\n${systemChunks.join("\n\n")}\n\n`
-    : "";
+  const system =
+    systemChunks.length > 0 ? `System:\n${systemChunks.join("\n\n")}\n\n` : "";
   return `${system}${sections.join("\n\n")}`;
 }
 
@@ -242,9 +239,7 @@ export function createCodexLocalModel(modelId: string): LanguageModelV2 {
       if (errorMessage || exitCode !== 0) {
         const stderr = (await stderrPromise).trim();
         throw new Error(
-          errorMessage ||
-            stderr ||
-            `codex exec exited with code ${exitCode}`
+          errorMessage || stderr || `codex exec exited with code ${exitCode}`
         );
       }
 
@@ -263,6 +258,7 @@ export function createCodexLocalModel(modelId: string): LanguageModelV2 {
         warnings: [],
       };
     },
+    // biome-ignore lint/suspicious/useAwait: LanguageModelV2.doStream must return a Promise; the awaits live inside the stream's start callback.
     async doStream(options: LanguageModelV2CallOptions) {
       const promptText = flattenPrompt(options.prompt);
       const child = spawnCodex(modelId, promptText, options.abortSignal);
@@ -336,7 +332,10 @@ export function createCodexLocalModel(modelId: string): LanguageModelV2 {
                 errorMessage ||
                 stderr ||
                 `codex exec exited with code ${exitCode}`;
-              controller.enqueue({ type: "error", error: new Error(finalError) });
+              controller.enqueue({
+                type: "error",
+                error: new Error(finalError),
+              });
               controller.enqueue({
                 type: "finish",
                 finishReason: "error",

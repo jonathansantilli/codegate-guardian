@@ -26,8 +26,14 @@ describe("testcontainer-pg harness", () => {
         ORDER BY tablename
     `;
     const names = tables.map((row) => row.tablename);
-    assert.ok(names.includes("User"), "User table should exist after migrations");
-    assert.ok(names.includes("Chat"), "Chat table should exist after migrations");
+    assert.ok(
+      names.includes("User"),
+      "User table should exist after migrations"
+    );
+    assert.ok(
+      names.includes("Chat"),
+      "Chat table should exist after migrations"
+    );
     assert.ok(
       names.includes("ScanRun_v1"),
       "ScanRun_v1 table should exist after migrations"

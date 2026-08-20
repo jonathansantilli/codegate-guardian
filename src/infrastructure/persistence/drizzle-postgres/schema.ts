@@ -66,8 +66,9 @@ export const scanRun = pgTable(
       .notNull()
       .references(() => message.id, { onDelete: "cascade" }),
     toolCallId: text("toolCallId").notNull(),
-    toolName: varchar("toolName", { enum: ["analyzeConfig", "scanGithubRepo"] })
-      .notNull(),
+    toolName: varchar("toolName", {
+      enum: ["analyzeConfig", "scanGithubRepo"],
+    }).notNull(),
     mode: text("mode"),
     scanMode: varchar("scanMode", { enum: ["repository", "skills"] }),
     repositoryUrl: text("repositoryUrl"),

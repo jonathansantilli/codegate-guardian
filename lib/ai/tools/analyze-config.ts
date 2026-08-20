@@ -37,7 +37,10 @@ export function sanitizeRelativePath(input: string): string {
   return safe;
 }
 
-export function guessConfigFilePath(content: string, filename?: string): string {
+export function guessConfigFilePath(
+  content: string,
+  filename?: string
+): string {
   if (filename) {
     return filename.startsWith(".") || filename.includes("/")
       ? filename
@@ -77,7 +80,7 @@ export const analyzeConfig = tool({
       .optional()
       .describe("Optional filename hint, e.g. mcp_servers.json or AGENTS.md"),
   }),
-  execute: async ({ content, filename }) => {
+  execute: ({ content, filename }) => {
     const id = randomUUID().slice(0, 8);
     const tmpDir = `/tmp/codegate-paste-${id}`;
 

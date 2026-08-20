@@ -25,9 +25,6 @@ export type ChatRepository = {
   listByUser(input: ListChatsInput): Promise<ListChatsResult>;
   deleteById(id: string): Promise<Chat | null>;
   deleteAllForUser(userId: string): Promise<{ deletedCount: number }>;
-  updateVisibility(
-    id: string,
-    visibility: ChatVisibility
-  ): Promise<void>;
+  updateVisibility(id: string, visibility: ChatVisibility): Promise<void>;
   updateTitle(id: string, title: string): Promise<void>;
 };

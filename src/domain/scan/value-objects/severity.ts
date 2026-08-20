@@ -1,4 +1,10 @@
-export const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] as const;
+export const SEVERITIES = [
+  "CRITICAL",
+  "HIGH",
+  "MEDIUM",
+  "LOW",
+  "INFO",
+] as const;
 
 export type Severity = (typeof SEVERITIES)[number];
 

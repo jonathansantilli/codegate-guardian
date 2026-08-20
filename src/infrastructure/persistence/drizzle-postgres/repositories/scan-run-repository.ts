@@ -1,7 +1,7 @@
 import { inArray } from "drizzle-orm";
 import type {
-  SaveScanRunInput,
   SavedScanRunHandle,
+  SaveScanRunInput,
   ScanRunRepository,
 } from "@/src/application/ports/persistence/scan-run-repository";
 import type { ScanRun } from "@/src/domain/scan/entities/scan-run";
@@ -22,21 +22,16 @@ export class DrizzleScanRunRepository implements ScanRunRepository {
 
   async deleteByMessageIds(messageIds: string[]): Promise<void> {
     if (messageIds.length === 0) return;
-    await this.db
-      .delete(scanRun)
-      .where(inArray(scanRun.messageId, messageIds));
+    await this.db.delete(scanRun).where(inArray(scanRun.messageId, messageIds));
   }
 
   async saveMany(runs: SaveScanRunInput[]): Promise<SavedScanRunHandle[]> {
     if (runs.length === 0) return [];
-    const inserted = await this.db
-      .insert(scanRun)
-      .values(runs)
-      .returning({
-        id: scanRun.id,
-        messageId: scanRun.messageId,
-        toolCallId: scanRun.toolCallId,
-      });
+    const inserted = await this.db.insert(scanRun).values(runs).returning({
+      id: scanRun.id,
+      messageId: scanRun.messageId,
+      toolCallId: scanRun.toolCallId,
+    });
     return inserted;
   }
 
