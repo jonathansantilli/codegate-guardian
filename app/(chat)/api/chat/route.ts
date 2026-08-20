@@ -1,4 +1,3 @@
-import { geolocation, ipAddress } from "@vercel/functions";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -7,7 +6,6 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import { checkBotId } from "botid/server";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
@@ -18,7 +16,7 @@ import {
   DEFAULT_CHAT_MODEL,
   getCapabilities,
 } from "@/lib/ai/models";
-import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { analyzeConfig } from "@/lib/ai/tools/analyze-config";
 import { createDocument } from "@/lib/ai/tools/create-document";
@@ -43,12 +41,11 @@ import {
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { checkIpRateLimit } from "@/lib/ratelimit";
+import { getClientIp } from "@/lib/security/client-ip";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
-
-export const maxDuration = 60;
 
 function getStreamContext() {
   try {
@@ -74,10 +71,7 @@ export async function POST(request: Request) {
     const { id, message, messages, selectedChatModel, selectedVisibilityType } =
       requestBody;
 
-    const [, session] = await Promise.all([
-      checkBotId().catch(() => null),
-      auth(),
-    ]);
+    const session = await auth();
 
     if (!session?.user) {
       return new ChatbotError("unauthorized:chat").toResponse();
@@ -91,7 +85,7 @@ export async function POST(request: Request) {
       localModelIds.has(selectedChatModel);
     const chatModel = isAllowedModel ? selectedChatModel : DEFAULT_CHAT_MODEL;
 
-    await checkIpRateLimit(ipAddress(request));
+    await checkIpRateLimit(getClientIp(request));
 
     const userType: UserType = session.user.type;
 
@@ -163,15 +157,6 @@ export async function POST(request: Request) {
       ];
     }
 
-    const { longitude, latitude, city, country } = geolocation(request);
-
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
-
     if (message?.role === "user") {
       await saveMessages({
         messages: [
@@ -199,7 +184,7 @@ export async function POST(request: Request) {
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(chatModel),
-          system: systemPrompt({ requestHints, supportsTools }),
+          system: systemPrompt(),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools: supportsTools
@@ -324,13 +309,11 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    const vercelId = request.headers.get("x-vercel-id");
-
     if (error instanceof ChatbotError) {
       return error.toResponse();
     }
 
-    console.error("Unhandled error in chat API:", error, { vercelId });
+    console.error("Unhandled error in chat API:", error);
     return new ChatbotError("offline:chat").toResponse();
   }
 }
