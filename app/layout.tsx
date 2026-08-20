@@ -8,7 +8,7 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://codegate-guardian.vercel.app"),
+  metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: "CodeGate Guardian",
   description:
     "Security scanner for AI coding configurations and repository risk analysis.",

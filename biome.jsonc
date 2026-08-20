@@ -66,11 +66,11 @@
               "level": "warn",
               "options": {
                 "paths": {
-                  "@vercel/blob": "Vercel dependency — domain must stay pure.",
-                  "@vercel/functions": "Vercel dependency — domain must stay pure.",
-                  "@vercel/otel": "Vercel dependency — domain must stay pure.",
-                  "@vercel/analytics": "Vercel dependency — domain must stay pure.",
-                  "botid": "Vercel dependency — domain must stay pure.",
+                  "@vercel/blob": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/functions": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/otel": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/analytics": "Removed: this project is Vercel-free and self-hosted.",
+                  "botid": "Removed: this project is Vercel-free and self-hosted.",
                   "next": "Domain layer must not import Next.js.",
                   "next/server": "Domain layer must not import Next.js.",
                   "react": "Domain layer must not import React.",
@@ -93,11 +93,11 @@
               "level": "warn",
               "options": {
                 "paths": {
-                  "@vercel/blob": "Application layer is framework-free.",
-                  "@vercel/functions": "Application layer is framework-free.",
-                  "@vercel/otel": "Application layer is framework-free.",
-                  "@vercel/analytics": "Application layer is framework-free.",
-                  "botid": "Application layer is framework-free.",
+                  "@vercel/blob": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/functions": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/otel": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/analytics": "Removed: this project is Vercel-free and self-hosted.",
+                  "botid": "Removed: this project is Vercel-free and self-hosted.",
                   "next": "Application layer must not import Next.js.",
                   "next/server": "Application layer must not import Next.js.",
                   "react": "Application layer must not import React.",
@@ -126,11 +126,11 @@
               "level": "warn",
               "options": {
                 "paths": {
-                  "@vercel/blob": "Vercel dependency — decouple per docs/decouple-vercel.md.",
-                  "@vercel/functions": "Vercel dependency — decouple per docs/decouple-vercel.md.",
-                  "@vercel/otel": "Vercel dependency — decouple per docs/decouple-vercel.md.",
-                  "@vercel/analytics": "Vercel dependency — decouple per docs/decouple-vercel.md.",
-                  "botid": "Vercel dependency — decouple per docs/decouple-vercel.md."
+                  "@vercel/blob": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/functions": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/otel": "Removed: this project is Vercel-free and self-hosted.",
+                  "@vercel/analytics": "Removed: this project is Vercel-free and self-hosted.",
+                  "botid": "Removed: this project is Vercel-free and self-hosted."
                 }
               }
             }

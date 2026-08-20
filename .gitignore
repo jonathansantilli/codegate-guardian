@@ -17,7 +17,6 @@ yarn-error.log*
 .env.production.local
 .turbo
 .env
-.vercel
 .env*.local
 /test-results/
 /playwright-report/
@@ -28,6 +27,13 @@ yarn-error.log*
 next-env.d.ts
 tsconfig.tsbuildinfo
 local-models.config.json
+
+# Locally stored uploads (filesystem object store)
+/data/
+
+# Screen recordings kept out of the build context
+*.mov
+*.mp4
 
 # Project docs to keep local only
 docs/codegate-guardian-hackathon-handoff.md
