@@ -1,4 +1,5 @@
 import type { ObjectStore } from "@/src/application/ports/storage/object-store";
+import { UPLOADS_ROUTE_PATH } from "@/src/shared/routes";
 import { createFilesystemObjectStore } from "../storage/filesystem-object-store";
 import { createS3ObjectStore } from "../storage/s3-object-store";
 import { type Env, loadEnv } from "./env";
@@ -10,8 +11,6 @@ import { type Env, loadEnv } from "./env";
 //
 // HMR-safe: dev reloads call disposeContainer() so adapter handles aren't
 // leaked across reloads.
-
-export const UPLOADS_ROUTE_PATH = "/api/uploads";
 
 export type ApplicationPorts = {
   readonly objectStore: ObjectStore;
