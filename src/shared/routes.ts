@@ -7,3 +7,6 @@
 
 /** Mount point of the route that serves locally stored uploads. */
 export const UPLOADS_ROUTE_PATH = "/api/uploads";
+
+/** Prefix for machine-authenticated agent endpoints (bearer token, no session). */
+export const AGENT_ROUTE_PREFIX = "/api/agent";

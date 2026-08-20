@@ -1,5 +1,11 @@
+import type { FleetRepository } from "@/src/application/ports/fleet/fleet-repository";
 import type { ObjectStore } from "@/src/application/ports/storage/object-store";
 import { UPLOADS_ROUTE_PATH } from "@/src/shared/routes";
+import {
+  createDrizzleClient,
+  type DrizzleClient,
+} from "../persistence/drizzle-postgres/client";
+import { DrizzleFleetRepository } from "../persistence/drizzle-postgres/repositories/fleet-repository";
 import { createFilesystemObjectStore } from "../storage/filesystem-object-store";
 import { createS3ObjectStore } from "../storage/s3-object-store";
 import { type Env, loadEnv } from "./env";
@@ -14,6 +20,7 @@ import { type Env, loadEnv } from "./env";
 
 export type ApplicationPorts = {
   readonly objectStore: ObjectStore;
+  readonly fleet: FleetRepository;
 };
 
 export type ApplicationContainer = {
@@ -68,13 +75,23 @@ function buildObjectStore(env: Env): {
 const defaultFactory: ContainerFactory = (env) => {
   const { objectStore, shutdown: shutdownObjectStore } = buildObjectStore(env);
 
+  // postgres-js opens no socket until the first query, so building the client
+  // here costs nothing; closing it on shutdown keeps dev HMR from leaking a
+  // pool per reload.
+  const dbClient: DrizzleClient = createDrizzleClient({
+    connectionUrl: env.POSTGRES_URL,
+  });
+
   return {
     env,
     useCases: Object.freeze({}),
-    ports: Object.freeze({ objectStore }),
-    shutdown: () => {
+    ports: Object.freeze({
+      objectStore,
+      fleet: new DrizzleFleetRepository(dbClient.db),
+    }),
+    shutdown: async () => {
       shutdownObjectStore();
-      return Promise.resolve();
+      await dbClient.close();
     },
   };
 };
