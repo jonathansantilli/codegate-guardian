@@ -4,15 +4,16 @@ import {
 } from "@/src/infrastructure/composition/container";
 import type { Env } from "@/src/infrastructure/composition/env";
 
-// Test helper for use-case unit tests. Gives back a container whose ports
-// are fakes from tests/fakes/. Phase 0 only has an empty container, so this
-// is a thin passthrough; Phase 3a onward populates the fakes map.
+// Test helper for use-case unit tests. Gives back a container built from a
+// fully-specified test env — filesystem object store, no external services —
+// so a test never depends on the ambient environment.
 
 const defaultEnv: Env = {
   NODE_ENV: "test",
   AUTH_SECRET: "test-secret-test-secret-test-secret-test",
   POSTGRES_URL: "postgres://test:test@localhost:5432/test",
   REDIS_URL: undefined,
+  APP_URL: "http://localhost:3000",
   IS_DEMO: false,
   NEXT_PUBLIC_BASE_PATH: "",
   HACKATHON_MODE: false,
@@ -21,18 +22,17 @@ const defaultEnv: Env = {
   LOCAL_CLI_MODELS_CONFIG: undefined,
   GOOGLE_GENERATIVE_AI_API_KEY: undefined,
   GEMINI_API_KEY: undefined,
-  AI_GATEWAY_API_KEY: undefined,
-  BLOB_READ_WRITE_TOKEN: undefined,
   OTEL_EXPORTER_OTLP_ENDPOINT: undefined,
   CODEX_BIN: undefined,
   CODEGATE_HOME: undefined,
-  OBJECT_STORE_DRIVER: "s3",
+  OBJECT_STORE_DRIVER: "filesystem",
   BOT_DETECTION_DRIVER: "noop",
   RATE_LIMITER_DRIVER: "in-memory",
   TELEMETRY_DRIVER: "noop",
   LOGGER_DRIVER: "console",
+  OBJECT_STORE_PATH: "./data/uploads",
   S3_ENDPOINT: undefined,
-  S3_REGION: undefined,
+  S3_REGION: "us-east-1",
   S3_BUCKET: undefined,
   S3_ACCESS_KEY_ID: undefined,
   S3_SECRET_ACCESS_KEY: undefined,

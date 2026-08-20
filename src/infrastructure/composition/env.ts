@@ -26,6 +26,10 @@ const envSchema = z.object({
   // Optional core
   REDIS_URL: optionalNonEmpty,
 
+  // Absolute base URL this instance is reached at. Used for page metadata and
+  // for building fetchable URLs for locally stored uploads.
+  APP_URL: z.string().default("http://localhost:3000"),
+
   // Demo / basePath behavior (A4 acceptance)
   IS_DEMO: booleanFromString.default(false),
   NEXT_PUBLIC_BASE_PATH: z.string().default(""),
@@ -40,11 +44,6 @@ const envSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: optionalNonEmpty,
   GEMINI_API_KEY: optionalNonEmpty,
 
-  // Legacy Vercel-era variables (kept readable through the transition
-  // and removed in the phase that decommissions the matching adapter).
-  AI_GATEWAY_API_KEY: optionalNonEmpty, // removed in Phase 4
-  BLOB_READ_WRITE_TOKEN: optionalNonEmpty, // removed in Phase 6
-
   // Telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalNonEmpty,
 
@@ -54,15 +53,20 @@ const envSchema = z.object({
 
   // Adapter selection (defaults chosen in each port's implementation
   // phase; surfaced here so the env contract is visible now).
-  OBJECT_STORE_DRIVER: z.enum(["s3", "filesystem"]).default("s3"),
+  // Filesystem is the default so a bare `next start` needs no extra services;
+  // the compose stack opts into MinIO by setting this to "s3".
+  OBJECT_STORE_DRIVER: z.enum(["s3", "filesystem"]).default("filesystem"),
   BOT_DETECTION_DRIVER: z.enum(["noop"]).default("noop"),
   RATE_LIMITER_DRIVER: z.enum(["redis", "in-memory"]).default("redis"),
   TELEMETRY_DRIVER: z.enum(["otlp", "noop"]).default("noop"),
   LOGGER_DRIVER: z.enum(["console", "otel"]).default("console"),
 
-  // S3 / MinIO configuration (consumed in Phase 6)
+  // Filesystem object store
+  OBJECT_STORE_PATH: z.string().default("./data/uploads"),
+
+  // S3 / MinIO configuration (required when OBJECT_STORE_DRIVER=s3)
   S3_ENDPOINT: optionalNonEmpty,
-  S3_REGION: optionalNonEmpty,
+  S3_REGION: z.string().default("us-east-1"),
   S3_BUCKET: optionalNonEmpty,
   S3_ACCESS_KEY_ID: optionalNonEmpty,
   S3_SECRET_ACCESS_KEY: optionalNonEmpty,
