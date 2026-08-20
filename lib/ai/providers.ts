@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { customProvider, gateway } from "ai";
+import { customProvider } from "ai";
 import { isTestEnvironment } from "../constants";
 import { titleModel } from "./models";
 
@@ -18,6 +18,9 @@ const googleProvider = geminiApiKey
   ? createGoogleGenerativeAI({ apiKey: geminiApiKey })
   : null;
 
+const MISSING_GOOGLE_KEY_MESSAGE =
+  "No Google Gemini API key is configured. Set GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY) in the environment.";
+
 export const myProvider = isTestEnvironment
   ? (() => {
       const { chatModel, titleModel } = require("./models.mock");
@@ -35,7 +38,10 @@ export function getLanguageModel(modelId: string) {
     return myProvider.languageModel(modelId);
   }
 
-  if (googleProvider && modelId.startsWith("google/")) {
+  if (modelId.startsWith("google/")) {
+    if (!googleProvider) {
+      throw new Error(MISSING_GOOGLE_KEY_MESSAGE);
+    }
     return googleProvider.languageModel(normalizeGeminiModelId(modelId));
   }
 
@@ -51,7 +57,7 @@ export function getLanguageModel(modelId: string) {
     return createCodexLocalModel(modelId.replace(/^codex\//, ""));
   }
 
-  return gateway.languageModel(modelId);
+  throw new Error(`Unsupported model: ${modelId}`);
 }
 
 export function getTitleModel() {
@@ -59,9 +65,9 @@ export function getTitleModel() {
     return myProvider.languageModel("title-model");
   }
 
-  if (googleProvider) {
-    return googleProvider.languageModel("gemini-2.5-flash");
+  if (!googleProvider) {
+    throw new Error(MISSING_GOOGLE_KEY_MESSAGE);
   }
 
-  return gateway.languageModel(titleModel.id);
+  return googleProvider.languageModel(normalizeGeminiModelId(titleModel.id));
 }
