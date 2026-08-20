@@ -1,0 +1,44 @@
+# Keep the build context small and free of secrets. Everything the image
+# needs is source; anything generated is rebuilt inside the container.
+
+.git
+.github
+node_modules
+**/node_modules
+.next
+out
+build
+dist
+data
+
+# Secrets — never copy these into an image layer
+.env
+.env.*
+!.env.example
+*.pem
+
+# Test and tooling output
+coverage
+test-results
+playwright-report
+blob-report
+.turbo
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Screen recordings and other large local media
+*.mov
+*.mp4
+*.zip
+
+# Editor and OS noise
+.DS_Store
+.vscode
+.cursor
+.idea
+.claude
+
+# Docs and local config that never affect the build
+docs
+local-models.config.json
+README.md

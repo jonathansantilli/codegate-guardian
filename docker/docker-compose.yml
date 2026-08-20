@@ -1,4 +1,62 @@
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runner
+    image: codegate-guardian:local
+    container_name: codegate-guardian-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      AUTH_SECRET: "${AUTH_SECRET:?AUTH_SECRET is required - generate one with 'openssl rand -base64 32'}"
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379
+      # Uploads go to the MinIO service. Switch OBJECT_STORE_DRIVER to
+      # filesystem to drop MinIO and use the uploads_data volume instead.
+      OBJECT_STORE_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: codegate-guardian-uploads
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      # Must be the URL a browser can reach MinIO at, not the internal one.
+      S3_PUBLIC_URL_BASE: ${S3_PUBLIC_URL_BASE:-http://localhost:9000/codegate-guardian-uploads}
+      S3_FORCE_PATH_STYLE: "true"
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      HACKATHON_MODE: ${HACKATHON_MODE:-false}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - uploads_data:/app/data/uploads
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: migrate
+    image: codegate-guardian-migrate:local
+    container_name: codegate-guardian-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
+    restart: "no"
+
   postgres:
     image: postgres:16-alpine
     container_name: codegate-guardian-postgres
@@ -69,3 +127,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  uploads_data:
