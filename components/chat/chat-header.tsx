@@ -1,11 +1,10 @@
 "use client";
 
-import { PanelLeftIcon } from "lucide-react";
+import { PanelLeftIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
-import { VercelIcon } from "./icons";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
 
 function PureChatHeader({
@@ -38,7 +37,7 @@ function PureChatHeader({
         className="flex size-8 items-center justify-center rounded-lg md:hidden"
         href="/"
       >
-        <VercelIcon size={14} />
+        <ShieldCheckIcon className="size-4" />
       </Link>
 
       {!isReadonly && (
@@ -47,20 +46,6 @@ function PureChatHeader({
           selectedVisibilityType={selectedVisibilityType}
         />
       )}
-
-      <Button
-        asChild
-        className="hidden rounded-lg bg-foreground px-4 text-background hover:bg-foreground/90 md:ml-auto md:flex"
-      >
-        <Link
-          href="https://vercel.com/new"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <VercelIcon size={16} />
-          Deploy Guardian
-        </Link>
-      </Button>
     </header>
   );
 }
