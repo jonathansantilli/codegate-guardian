@@ -34,6 +34,8 @@ function report(
         pattern: ".claude/skills/*/SKILL.md",
         path: "/Users/jsantilli/.claude/skills/podcast/SKILL.md",
         exists: true,
+        contentHash:
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         riskSurface: ["prompt-injection"],
         resolvedAgainst: "/Users/jsantilli",
       },
@@ -45,6 +47,7 @@ function report(
         pattern: ".cursor/mcp.json",
         path: "/repo/.cursor/mcp.json",
         exists: true,
+        contentHash: null,
         riskSurface: [],
         resolvedAgainst: "/repo",
       },
@@ -139,6 +142,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
             pattern: ".cursor/mcp.json",
             path: "/repo/.cursor/mcp.json",
             exists: true,
+            contentHash: null,
             riskSurface: [],
             resolvedAgainst: "/repo",
           },
@@ -165,6 +169,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
             pattern: ".claude/skills/*/SKILL.md",
             path: "/Users/jsantilli/.claude/skills/gone/SKILL.md",
             exists: false,
+            contentHash: null,
             riskSurface: [],
             resolvedAgainst: "/Users/jsantilli",
           },
@@ -223,6 +228,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       pattern: ".claude/skills/*/SKILL.md",
       path: `/Users/jsantilli/.claude/skills/skill-${index}/SKILL.md`,
       exists: true,
+      contentHash: null,
       riskSurface: [],
       resolvedAgainst: "/Users/jsantilli",
     }));
@@ -233,5 +239,97 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
 
     const detail = await repository.findHostDetail(hostId);
     assert.equal(detail?.items.length, 1200);
+  });
+  // Identity is the content hash: same name, different bytes = two artifacts.
+  it("Given two machines with same-named but different files, when grouping artifacts, then each hash is its own variant", async () => {
+    const item = (hash: string) => ({
+      tool: "claude-code",
+      kind: "skill" as const,
+      itemType: null,
+      scope: "user" as const,
+      pattern: ".claude/skills/podcast/SKILL.md",
+      path: "/Users/x/.claude/skills/podcast/SKILL.md",
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: "/Users/x",
+    });
+    const bad = `sha256:${"b".repeat(64)}`;
+    const clean = `sha256:${"c".repeat(64)}`;
+
+    await repository.recordReport(
+      report({ machineId: "m-1", items: [item(bad)] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-2", items: [item(bad)] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-3", items: [item(clean)] })
+    );
+
+    const groups = await repository.listArtifactGroups();
+    const podcast = groups.find((g) => g.name === "SKILL.md");
+
+    assert.ok(podcast);
+    assert.equal(podcast.variants.length, 2);
+    assert.equal(podcast.machineCount, 3);
+    assert.equal(podcast.variants[0].contentHash, bad);
+    assert.equal(podcast.variants[0].machineCount, 2);
+    assert.equal(podcast.variants[1].machineCount, 1);
+  });
+
+  it("Given an artifact removed in a later report, when grouping, then it no longer counts", async () => {
+    const hash = `sha256:${"d".repeat(64)}`;
+    const withItem = {
+      tool: "claude-code",
+      kind: "skill" as const,
+      itemType: null,
+      scope: "user" as const,
+      pattern: "p",
+      path: "/Users/x/gone/SKILL.md",
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: "/Users/x",
+    };
+
+    await repository.recordReport(
+      report({ machineId: "m-9", items: [withItem] })
+    );
+    assert.ok(
+      (await repository.listArtifactGroups()).some((g) => g.name === "SKILL.md")
+    );
+
+    await repository.recordReport(
+      report({
+        machineId: "m-9",
+        items: [],
+        receivedAt: new Date("2026-08-22T09:00:00Z"),
+      })
+    );
+    assert.equal((await repository.listArtifactGroups()).length, 0);
+  });
+
+  it("Given an item with no content hash, when grouping, then it is excluded as unidentifiable", async () => {
+    await repository.recordReport(
+      report({
+        machineId: "m-unhashed",
+        items: [
+          {
+            tool: "claude-code",
+            kind: "skill",
+            itemType: null,
+            scope: "user",
+            pattern: "p",
+            path: "/Users/x/unhashed/SKILL.md",
+            exists: true,
+            contentHash: null,
+            riskSurface: [],
+            resolvedAgainst: "/Users/x",
+          },
+        ],
+      })
+    );
+    assert.deepEqual(await repository.listArtifactGroups(), []);
   });
 });

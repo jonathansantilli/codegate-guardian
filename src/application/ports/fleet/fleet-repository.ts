@@ -26,6 +26,7 @@ export type RecordInventoryItemInput = {
   pattern: string | null;
   path: string;
   exists: boolean;
+  contentHash: string | null;
   riskSurface: unknown;
   resolvedAgainst: string | null;
 };
@@ -60,7 +61,25 @@ export type HostDetailItem = {
   scope: InventoryScope;
   path: string;
   exists: boolean;
+  contentHash: string | null;
   riskSurface: string[];
+};
+
+/** One distinct set of bytes, and every machine carrying exactly those bytes. */
+export type ArtifactVariant = {
+  contentHash: string;
+  machineCount: number;
+  firstSeenAt: Date;
+  paths: string[];
+};
+
+/** Artifacts sharing a name, split into their distinct variants. */
+export type ArtifactGroup = {
+  name: string;
+  tool: string;
+  kind: InventoryItemKind;
+  variants: ArtifactVariant[];
+  machineCount: number;
 };
 
 export type FleetRepository = {
@@ -68,4 +87,6 @@ export type FleetRepository = {
   recordReport(input: RecordHostReportInput): Promise<RecordedReport>;
   listHostSummaries(): Promise<HostSummary[]>;
   findHostDetail(hostId: string): Promise<HostDetail | null>;
+  /** Fleet-wide artifacts, grouped by content hash — never by name. */
+  listArtifactGroups(): Promise<ArtifactGroup[]>;
 };

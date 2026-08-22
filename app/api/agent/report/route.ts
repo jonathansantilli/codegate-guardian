@@ -27,6 +27,7 @@ function toItemInput(item: InventoryItemPayload): RecordInventoryItemInput {
     pattern: item.pattern ?? null,
     path: item.path,
     exists: item.exists,
+    contentHash: item.sha256 ?? null,
     riskSurface: item.risk_surface,
     resolvedAgainst: item.resolved_against ?? null,
   };
