@@ -335,6 +335,28 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
     );
     assert.deepEqual(await repository.listArtifactGroups(), []);
   });
+  // One machine carrying several variants of a name is still one machine.
+  it("Given one machine carries two variants of a name, when grouping, then it counts one machine", async () => {
+    const item = (hash: string, path: string) => ({
+      tool: "claude-code", kind: "skill" as const, itemType: null,
+      scope: "user" as const, pattern: "p", path,
+      exists: true, contentHash: hash, riskSurface: [], resolvedAgainst: "/Users/x",
+    });
+
+    await repository.recordReport(
+      report({
+        machineId: "m-multi",
+        items: [
+          item(`sha256:${"1".repeat(64)}`, "/Users/x/a/README.md"),
+          item(`sha256:${"2".repeat(64)}`, "/Users/x/b/README.md"),
+        ],
+      })
+    );
+
+    const [group] = await repository.listArtifactGroups();
+    assert.equal(group.variants.length, 2);
+    assert.equal(group.machineCount, 1);
+  });
 });
 
 describe("Feature: finding lifecycle (Drizzle-Postgres)", () => {
