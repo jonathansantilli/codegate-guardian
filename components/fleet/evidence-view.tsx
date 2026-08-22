@@ -74,8 +74,9 @@ export function EvidenceView({
     );
   }
 
+  // The scanner formats its own excerpt, line numbers included. Rendering it
+  // verbatim keeps the console honest about what was actually reported.
   const lines = evidence.split("\n");
-  const firstLine = line ?? 1;
 
   return (
     <div className="flex flex-col gap-2">
@@ -111,13 +112,10 @@ export function EvidenceView({
       <div className="overflow-x-auto rounded-lg border border-border bg-muted/40">
         {lines.map((text, index) => (
           <div
-            className="flex items-start gap-3 px-3 py-0.5 font-mono text-xs"
+            className="px-3 py-0.5 font-mono text-xs"
             // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the excerpt IS its identity; two identical lines are different lines.
             key={`line-${index}`}
           >
-            <span className="w-8 shrink-0 select-none text-right text-muted-foreground tabular-nums">
-              {firstLine + index}
-            </span>
             <span className="whitespace-pre-wrap break-all">
               {reveal
                 ? revealHidden(text).map((part, i) =>
