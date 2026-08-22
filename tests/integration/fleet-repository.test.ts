@@ -338,9 +338,16 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
   // One machine carrying several variants of a name is still one machine.
   it("Given one machine carries two variants of a name, when grouping, then it counts one machine", async () => {
     const item = (hash: string, path: string) => ({
-      tool: "claude-code", kind: "skill" as const, itemType: null,
-      scope: "user" as const, pattern: "p", path,
-      exists: true, contentHash: hash, riskSurface: [], resolvedAgainst: "/Users/x",
+      tool: "claude-code",
+      kind: "skill" as const,
+      itemType: null,
+      scope: "user" as const,
+      pattern: "p",
+      path,
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: "/Users/x",
     });
 
     await repository.recordReport(
