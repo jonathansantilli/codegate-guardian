@@ -30,6 +30,7 @@ import type {
   RecordedReport,
   RecordHostReportInput,
   SavePolicyInput,
+  SavePolicyResult,
   SuppressFindingInput,
   Suppression,
 } from "@/src/application/ports/fleet/fleet-repository";
@@ -700,7 +701,14 @@ export class DrizzleFleetRepository implements FleetRepository {
       .where(and(eq(hostFinding.suppressed, false), isNull(host.revokedAt)));
 
     const live = await this.liveSuppressions();
-    const visible = rows.filter((row) => !isSuppressedBy(live, row));
+    const acknowledgements = await this.acknowledgementsByHost();
+    const visible = rows
+      .filter((row) => !isSuppressedBy(live, row))
+      .map((row) => ({
+        ...row,
+        acknowledgedBy:
+          acknowledgements.get(`${row.hostId}::${row.fingerprint}`)?.by ?? null,
+      }));
 
     return visible
       .sort(
@@ -776,16 +784,29 @@ export class DrizzleFleetRepository implements FleetRepository {
     const ownerByHostname = new Map(hosts.map((h) => [h.hostname, h.owner]));
     const acknowledged = await this.acknowledgedOnHost();
 
-    // The NEWEST VERSION any machine reports, not the version in the newest
-    // report. Ordering by arrival meant one machine on an old feed, reporting
-    // last, made the whole fleet look stale — and tripped the degraded screen
-    // that replaces the entire overview, flickering back moments later.
-    // Versions are dated (2026.08.20.1), so they sort lexically.
-    const [newest] = await this.db
-      .select({ kbVersion: hostReport.kbVersion })
+    // The newest feed among what LIVE machines CURRENTLY report.
+    //
+    // Ordering by arrival made one machine on an old feed, reporting last,
+    // look like the whole fleet was stale. Taking the max over every report
+    // ever stored fixed that and broke it the other way: a version reported
+    // once in February stood forever, so a fleet that had since been reimaged
+    // onto an eight-month-old feed read as current. A false all-clear on a
+    // staleness signal is worse than a false alarm — nobody investigates it.
+    const latestPerHost = this.db
+      .selectDistinctOn([hostReport.hostId], {
+        kbVersion: hostReport.kbVersion,
+        hostId: hostReport.hostId,
+      })
       .from(hostReport)
-      .where(isNotNull(hostReport.kbVersion))
-      .orderBy(desc(hostReport.kbVersion))
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest_feed");
+
+    const [newest] = await this.db
+      .select({ kbVersion: latestPerHost.kbVersion })
+      .from(latestPerHost)
+      .innerJoin(host, eq(latestPerHost.hostId, host.id))
+      .where(and(isNotNull(latestPerHost.kbVersion), isNull(host.revokedAt)))
+      .orderBy(desc(latestPerHost.kbVersion))
       .limit(1);
     const newestKbVersion = newest?.kbVersion ?? null;
 
@@ -806,6 +827,7 @@ export class DrizzleFleetRepository implements FleetRepository {
       ).size,
       openFindings: attention.length,
       attentionTotal: attention.length,
+      hostsRevoked: allHosts.length - hosts.length,
       machinesWithFindings: new Set(attention.map((row) => row.hostId)).size,
       untriagedFindings: attention.filter(
         (row) => !acknowledged.has(`${row.hostId}::${row.fingerprint}`)
@@ -834,6 +856,19 @@ export class DrizzleFleetRepository implements FleetRepository {
    * per machine — the same malicious skill on two laptops is two people to
    * talk to. Reading it per fingerprint marked both triaged when one was.
    */
+  /** Who acknowledged what, per machine, for the screens that act per machine. */
+  private async acknowledgementsByHost(): Promise<
+    Map<string, { by: string; at: Date }>
+  > {
+    const rows = await this.db.select().from(findingAcknowledgement);
+    return new Map(
+      rows.map((row) => [
+        `${row.hostId}::${row.fingerprint}`,
+        { by: row.acknowledgedBy, at: row.acknowledgedAt },
+      ])
+    );
+  }
+
   private async acknowledgedOnHost(): Promise<Set<string>> {
     const rows = await this.db
       .select({
@@ -981,12 +1016,15 @@ export class DrizzleFleetRepository implements FleetRepository {
         tool: hostInventoryItem.tool,
         kind: hostInventoryItem.kind,
         contentHash: hostInventoryItem.contentHash,
+        // Grouped by NAME as well as hash, and aggregating the paths beneath.
+        // By path alone, the same bytes under two home directories read as
+        // "same name, different bytes" — the opposite of identity-by-content.
+        // By hash alone, one hash under two names (CLAUDE.md and AGENTS.md,
+        // byte-identical) collapsed into whichever name came first and the
+        // other vanished from the inventory entirely.
+        name: sql<string>`${SQL_ARTIFACT_NAME}`,
         machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
         firstSeenAt: sql<Date>`min(${hostReport.collectedAt})`,
-        // Every path the identical bytes were found at. Grouping BY path made
-        // one hash into several variants, so the same file under /Users/alice
-        // and /Users/bob read as "same name, different bytes" — the exact
-        // opposite of what identity-by-content means.
         paths: sql<string[]>`array_agg(distinct ${hostInventoryItem.path})`,
       })
       .from(hostInventoryItem)
@@ -1001,7 +1039,8 @@ export class DrizzleFleetRepository implements FleetRepository {
       .groupBy(
         hostInventoryItem.tool,
         hostInventoryItem.kind,
-        hostInventoryItem.contentHash
+        hostInventoryItem.contentHash,
+        SQL_ARTIFACT_NAME
       );
 
     // Group by the artifact's display name, but keep each hash separate
@@ -1009,7 +1048,9 @@ export class DrizzleFleetRepository implements FleetRepository {
     const groups = new Map<string, ArtifactGroup>();
 
     for (const row of rows) {
-      const name = artifactName(row.paths[0] ?? "");
+      // The name the database grouped by, so this partition and the
+      // per-name machine count below agree on what a group is.
+      const name = row.name;
       const key = `${row.tool}::${row.kind}::${name}`;
       const group = groups.get(key) ?? {
         name,
@@ -1107,8 +1148,13 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostFinding)
       .innerJoin(hostReport, eq(hostFinding.reportId, hostReport.id))
+      .innerJoin(host, eq(hostFinding.hostId, host.id))
       .leftJoin(latest, eq(hostFinding.hostId, latest.hostId))
-      .where(eq(hostFinding.suppressed, false));
+      // Revoked machines are excluded here as they are from the attention
+      // queue. Without this, their findings sat Open on a machine that can
+      // never report again — present on nothing, impossible to resolve, and
+      // still counted in the nav badge.
+      .where(and(eq(hostFinding.suppressed, false), isNull(host.revokedAt)));
 
     // A live suppression hides a finding from the queue. Expired and revoked
     // ones do not: silence has to be renewed deliberately, not by default.
@@ -1313,7 +1359,9 @@ export class DrizzleFleetRepository implements FleetRepository {
         hostId: hostFinding.hostId,
       })
       .from(hostFinding)
-      .innerJoin(latest, eq(hostFinding.reportId, latest.id));
+      .innerJoin(latest, eq(hostFinding.reportId, latest.id))
+      .innerJoin(host, eq(hostFinding.hostId, host.id))
+      .where(isNull(host.revokedAt));
 
     return rows.map((row) => ({
       id: row.id,
@@ -1465,7 +1513,20 @@ export class DrizzleFleetRepository implements FleetRepository {
       .limit(limit);
   }
 
-  async savePolicy(input: SavePolicyInput): Promise<{ id: string }> {
+  async savePolicy(input: SavePolicyInput): Promise<SavePolicyResult> {
+    // A name collision is a person naming two rules the same thing. Letting
+    // the unique constraint surface as an unhandled 500 turned that into a
+    // server error in the log and "something went wrong" on screen.
+    const [clash] = await this.db
+      .select({ id: policy.id })
+      .from(policy)
+      .where(eq(policy.name, input.name))
+      .limit(1);
+
+    if (clash && clash.id !== input.id) {
+      return { outcome: "name-taken" };
+    }
+
     if (input.id) {
       const [row] = await this.db
         .update(policy)
@@ -1480,7 +1541,7 @@ export class DrizzleFleetRepository implements FleetRepository {
         })
         .where(eq(policy.id, input.id))
         .returning({ id: policy.id });
-      return { id: row.id };
+      return { outcome: "saved", id: row.id };
     }
 
     const [row] = await this.db
@@ -1496,7 +1557,8 @@ export class DrizzleFleetRepository implements FleetRepository {
         updatedAt: input.now,
       })
       .returning({ id: policy.id });
-    return { id: row.id };
+
+    return { outcome: "saved", id: row.id };
   }
 
   /**

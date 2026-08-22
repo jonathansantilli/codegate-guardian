@@ -49,6 +49,13 @@ export async function PUT(request: Request) {
     now,
   });
 
+  if (saved.outcome === "name-taken") {
+    return Response.json(
+      { error: "A policy with that name already exists." },
+      { status: 409 }
+    );
+  }
+
   await fleet.recordActivity({
     occurredAt: now,
     actorKind: "person",

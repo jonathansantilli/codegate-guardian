@@ -55,6 +55,7 @@ type Attention = {
   team: string | null;
   fingerprint: string;
   lastSeenAt: string;
+  acknowledgedBy: string | null;
 };
 
 type Host = { host: { id: string; hostname: string; lastSeenAt: string } };
@@ -94,10 +95,6 @@ export function FindingsScreen() {
     fetcher,
     { refreshInterval: 30_000 }
   );
-  const { data: attentionData } = useSWR<{ attention: Attention[] }>(
-    `${API_BASE}/attention`,
-    fetcher
-  );
   const { data: hostData } = useSWR<{ hosts: Host[] }>(`${API_BASE}`, fetcher);
   const { data: suppressionData } = useSWR<{ suppressions: Suppression[] }>(
     `${API_BASE}/suppressions`,
@@ -109,10 +106,6 @@ export function FindingsScreen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [suppressing, setSuppressing] = useState<SuppressTarget | null>(null);
 
-  if (isLoading) {
-    return <Loading label="Loading findings…" />;
-  }
-
   const findings = [...(data?.findings ?? [])].sort(
     (a, b) =>
       severityRank(a.severity) - severityRank(b.severity) ||
@@ -123,6 +116,26 @@ export function FindingsScreen() {
   // Nothing outstanding is good news, not an empty database — so the screen
   // opens on what did close rather than pretending there is nothing to see.
   const filter = status ?? (outstanding.length > 0 ? "open" : "resolved");
+
+  const shown = findings
+    .filter((f) => filter === "all" || f.status === filter)
+    .filter((f) => !severity || f.severity === severity);
+  const current =
+    shown.find((f) => f.fingerprint === selected) ?? shown[0] ?? null;
+
+  // Asked for one finding, so the machine list is complete rather than
+  // whatever survived the queue's cap — which had the panel saying a finding
+  // was on three machines and, underneath, on none.
+  const { data: attentionData } = useSWR<{ attention: Attention[] }>(
+    current
+      ? `${API_BASE}/attention?fingerprint=${encodeURIComponent(current.fingerprint)}`
+      : null,
+    fetcher
+  );
+
+  if (isLoading) {
+    return <Loading label="Loading findings…" />;
+  }
 
   if (findings.length === 0) {
     const hosts = hostData?.hosts ?? [];
@@ -166,16 +179,8 @@ export function FindingsScreen() {
           : findings.filter((x) => x.status === f.key).length,
   }));
 
-  const visible = findings
-    .filter((f) => filter === "all" || f.status === filter)
-    .filter((f) => !severity || f.severity === severity);
-
-  const current =
-    visible.find((f) => f.fingerprint === selected) ?? visible[0] ?? null;
-
-  const presentOn = (attentionData?.attention ?? []).filter(
-    (row) => row.fingerprint === current?.fingerprint
-  );
+  const visible = shown;
+  const presentOn = attentionData?.attention ?? [];
 
   async function acknowledge(finding: Finding, hostId: string) {
     const response = await fetch(`${API_BASE}/acknowledge`, {
@@ -589,9 +594,12 @@ export function FindingsScreen() {
                           {row.owner ?? "Unassigned"} ·{" "}
                           {formatRelativeTime(new Date(row.lastSeenAt))}
                         </span>
-                        {current.acknowledgedBy ? (
+                        {/* Per machine: acknowledging one laptop says nothing about
+                            another, and hiding the button on the rest left the
+                            operator unable to take responsibility for them. */}
+                        {row.acknowledgedBy ? (
                           <Badge tone="sec">
-                            Acknowledged by {current.acknowledgedBy}
+                            Acknowledged by {row.acknowledgedBy}
                           </Badge>
                         ) : (
                           <button
