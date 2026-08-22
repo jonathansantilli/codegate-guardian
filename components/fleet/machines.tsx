@@ -165,17 +165,20 @@ export function MachinesScreen() {
         <label className="input" style={{ width: "260px" }}>
           <Ic name="search" size={14} />
           <input
-            className="input"
             onChange={(event) => {
               setQuery(event.target.value);
               setPage(0);
             }}
             placeholder="Filter by hostname or owner"
             style={{
+              flex: 1,
+              minWidth: 0,
               border: 0,
-              height: "auto",
-              padding: 0,
+              outline: "none",
               background: "none",
+              color: "var(--fg)",
+              font: "inherit",
+              padding: 0,
             }}
             value={query}
           />

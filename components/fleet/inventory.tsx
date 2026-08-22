@@ -184,14 +184,17 @@ export function InventoryScreen() {
         <label className="input" style={{ width: "250px" }}>
           <Ic name="search" size={14} />
           <input
-            className="input"
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter by name or path"
             style={{
+              flex: 1,
+              minWidth: 0,
               border: 0,
-              height: "auto",
-              padding: 0,
+              outline: "none",
               background: "none",
+              color: "var(--fg)",
+              font: "inherit",
+              padding: 0,
             }}
             value={query}
           />
