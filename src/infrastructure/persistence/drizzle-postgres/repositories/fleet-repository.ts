@@ -398,6 +398,51 @@ export class DrizzleFleetRepository implements FleetRepository {
       .where(eq(host.id, hostId));
   }
 
+  async findHostByTokenHash(tokenHash: string) {
+    const [row] = await this.db
+      .select()
+      .from(host)
+      .where(eq(host.agentTokenHash, tokenHash))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async enrolHost({
+    machineId,
+    tokenHash,
+    enrolledAt,
+  }: {
+    machineId: string;
+    tokenHash: string;
+    enrolledAt: Date;
+  }): Promise<{ hostId: string }> {
+    // A machine that enrols again keeps its history and its findings; only
+    // the credential changes. Re-enrolling also lifts a revocation, because
+    // redeeming a fresh code is an operator's deliberate act.
+    const [row] = await this.db
+      .insert(host)
+      .values({
+        machineId,
+        hostname: machineId,
+        agentTokenHash: tokenHash,
+        enrolledAt,
+        firstSeenAt: enrolledAt,
+        lastSeenAt: enrolledAt,
+      })
+      .onConflictDoUpdate({
+        target: host.machineId,
+        set: {
+          agentTokenHash: tokenHash,
+          enrolledAt,
+          revokedAt: null,
+          revokedBy: null,
+        },
+      })
+      .returning({ id: host.id });
+
+    return { hostId: row.id };
+  }
+
   async findHostByMachineId(machineId: string) {
     const [row] = await this.db
       .select()

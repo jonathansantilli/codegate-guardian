@@ -352,6 +352,23 @@ export type FleetRepository = {
   restoreHost(input: { hostId: string }): Promise<void>;
   /** The machine behind an agent's id, for deciding whether to accept a report. */
   findHostByMachineId(machineId: string): Promise<Host | null>;
+  /**
+   * The machine a reporting token belongs to.
+   *
+   * This is how a check-in is identified. The id in the request body is the
+   * agent's claim; this is the server's record.
+   */
+  findHostByTokenHash(tokenHash: string): Promise<Host | null>;
+  /**
+   * Binds a machine to the token it will report with, creating its row if the
+   * machine has never been seen. Re-enrolling replaces the token, so a
+   * compromised one stops working the moment the machine enrols again.
+   */
+  enrolHost(input: {
+    machineId: string;
+    tokenHash: string;
+    enrolledAt: Date;
+  }): Promise<{ hostId: string }>;
   /** Machines and people needing attention, worst first. */
   listAttention(limit?: number): Promise<AttentionRow[]>;
   /** The overview's headline numbers in one round trip. */

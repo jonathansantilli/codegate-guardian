@@ -53,10 +53,22 @@ export const host = pgTable(
      */
     revokedAt: timestamp("revokedAt"),
     revokedBy: text("revokedBy"),
+    /**
+     * sha256 of the token this machine reports with, issued at enrolment.
+     *
+     * The server identifies a machine by its token, not by the id in the
+     * request body — otherwise any agent holding a shared secret could claim
+     * another machine's identity and, by omitting its findings, mark it clean.
+     * Only the hash is stored, so a database dump is not a set of working
+     * fleet credentials.
+     */
+    agentTokenHash: text("agentTokenHash"),
+    enrolledAt: timestamp("enrolledAt"),
   },
   (table) => ({
     machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),
     lastSeenIdx: index("Host_v1_last_seen_idx").on(table.lastSeenAt),
+    agentTokenIdx: index("Host_v1_agent_token_idx").on(table.agentTokenHash),
   })
 );
 

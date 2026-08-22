@@ -24,6 +24,9 @@ export type Host = {
    */
   revokedAt: Date | null;
   revokedBy: string | null;
+  /** sha256 of this machine's own reporting token; null before enrolment. */
+  agentTokenHash: string | null;
+  enrolledAt: Date | null;
 };
 
 /**
