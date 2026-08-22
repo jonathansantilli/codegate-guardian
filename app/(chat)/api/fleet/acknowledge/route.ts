@@ -5,15 +5,14 @@ import { getContainer } from "@/src/infrastructure";
 
 const bodySchema = z.object({
   hostId: z.string().uuid(),
-  owner: z.string().trim().max(200).nullable(),
-  team: z.string().trim().max(200).nullable(),
+  fingerprint: z.string().min(1).max(200),
+  note: z.string().trim().max(2000).optional(),
 });
 
-// Who is accountable for a machine. Display data an operator maintains — it
-// grants nothing and controls nothing.
-export async function PUT(request: Request) {
+// Taking responsibility for a finding. Deliberately does not close it: only a
+// later report that no longer carries the finding can do that.
+export async function POST(request: Request) {
   const session = await auth();
-
   if (!session?.user) {
     return new ChatbotError("unauthorized:chat").toResponse();
   }
@@ -27,15 +26,21 @@ export async function PUT(request: Request) {
   const fleet = getContainer().ports.fleet;
   const now = new Date();
 
-  await fleet.assignOwner(parsed.data);
+  await fleet.acknowledgeFinding({
+    ...parsed.data,
+    acknowledgedBy: actor,
+    acknowledgedAt: now,
+  });
+
   await fleet.recordActivity({
     occurredAt: now,
     actorKind: "person",
     actorName: actor,
-    action: parsed.data.owner ? "Assigned an owner" : "Cleared an owner",
-    target: parsed.data.owner ?? parsed.data.hostId,
-    result: "Saved",
-    apiCall: "PUT /api/fleet/owner",
+    action: "Acknowledged a finding",
+    target: parsed.data.fingerprint,
+    result: "Recorded",
+    apiCall: "POST /api/fleet/acknowledge",
   });
+
   return Response.json({ ok: true });
 }

@@ -433,3 +433,63 @@ export const enrolmentCode = pgTable(
 );
 
 export type EnrolmentCode = InferSelectModel<typeof enrolmentCode>;
+
+/**
+ * What happened on this server, and who did it.
+ *
+ * Records actions taken here — never anything done to a machine, because
+ * nothing here reaches one. Machine check-ins are recorded too, since from the
+ * server's side receiving a report is an event worth auditing.
+ */
+export const activityEvent = pgTable(
+  "ActivityEvent_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    actorKind: varchar("actorKind", {
+      enum: ["person", "service", "agent", "system"],
+    }).notNull(),
+    actorName: text("actorName").notNull(),
+    action: text("action").notNull(),
+    target: text("target"),
+    result: text("result").notNull(),
+    /** The API call behind it, where there was one. */
+    apiCall: text("apiCall"),
+  },
+  (table) => ({
+    occurredIdx: index("ActivityEvent_v1_occurred_idx").on(table.occurredAt),
+    actorIdx: index("ActivityEvent_v1_actor_idx").on(table.actorKind),
+  })
+);
+
+export type ActivityEvent = InferSelectModel<typeof activityEvent>;
+
+/**
+ * A rule this server evaluates against what machines report.
+ *
+ * It never reaches a machine and cannot block anything there: a violation is
+ * reported here, and the fix happens on the machine.
+ */
+export const policy = pgTable(
+  "Policy_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** Which rule id a reported finding must carry to violate this policy. */
+    ruleId: text("ruleId").notNull(),
+    severity: varchar("severity", {
+      enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+    }).notNull(),
+    version: integer("version").notNull().default(1),
+    enabled: boolean("enabled").notNull().default(true),
+    createdBy: text("createdBy").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+    updatedAt: timestamp("updatedAt").notNull(),
+  },
+  (table) => ({
+    nameKey: unique("Policy_v1_name_key").on(table.name),
+  })
+);
+
+export type Policy = InferSelectModel<typeof policy>;

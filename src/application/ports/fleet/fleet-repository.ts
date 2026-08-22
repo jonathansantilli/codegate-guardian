@@ -32,6 +32,10 @@ export type FleetFinding = {
   lastSeenAt: Date;
   acknowledgedBy: string | null;
   acknowledgedAt: Date | null;
+  /** The excerpt the scanner reported, so the console can show the bytes. */
+  evidence: string | null;
+  line: number | null;
+  column: number | null;
 };
 
 export type RecordFindingInput = {
@@ -187,6 +191,48 @@ export type EnrolmentCodeSummary = {
   usable: boolean;
 };
 
+export type ActorKind = "person" | "service" | "agent" | "system";
+
+export type ActivityRecord = {
+  id: string;
+  occurredAt: Date;
+  actorKind: ActorKind;
+  actorName: string;
+  action: string;
+  target: string | null;
+  result: string;
+  apiCall: string | null;
+};
+
+export type RecordActivityInput = Omit<ActivityRecord, "id">;
+
+export type PolicyRecord = {
+  id: string;
+  name: string;
+  description: string | null;
+  ruleId: string;
+  severity: string;
+  version: number;
+  enabled: boolean;
+  createdBy: string;
+  updatedAt: Date;
+  /** Machines whose latest report violates this policy. */
+  violatingMachines: number;
+  /** Machines evaluated, so compliance can be stated honestly. */
+  evaluatedMachines: number;
+};
+
+export type SavePolicyInput = {
+  id?: string;
+  name: string;
+  description?: string;
+  ruleId: string;
+  severity: string;
+  enabled: boolean;
+  createdBy: string;
+  now: Date;
+};
+
 export type FleetRepository = {
   /** Upserts the host by machineId and stores the report and its items. */
   recordReport(input: RecordHostReportInput): Promise<RecordedReport>;
@@ -214,6 +260,10 @@ export type FleetRepository = {
     code: string;
     now: Date;
   }): Promise<{ id: string } | null>;
+  recordActivity(input: RecordActivityInput): Promise<void>;
+  listActivity(limit?: number): Promise<ActivityRecord[]>;
+  savePolicy(input: SavePolicyInput): Promise<{ id: string }>;
+  listPolicies(): Promise<PolicyRecord[]>;
   acknowledgeFinding(input: {
     hostId: string;
     fingerprint: string;
