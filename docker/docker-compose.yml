@@ -35,6 +35,8 @@ services:
       # Must be the URL a browser can reach MinIO at, not the internal one.
       S3_PUBLIC_URL_BASE: ${S3_PUBLIC_URL_BASE:-http://localhost:9000/codegate-guardian-uploads}
       S3_FORCE_PATH_STYLE: "true"
+      # Agents present this to check in. Absent means ingest is closed.
+      AGENT_INGEST_TOKEN: ${AGENT_INGEST_TOKEN:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       HACKATHON_MODE: ${HACKATHON_MODE:-false}
