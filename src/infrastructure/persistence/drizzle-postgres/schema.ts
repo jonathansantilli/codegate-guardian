@@ -264,8 +264,6 @@ export const hostReport = pgTable(
   })
 );
 
-export type HostReport = InferSelectModel<typeof hostReport>;
-
 export const hostInventoryItem = pgTable(
   "HostInventoryItem_v1",
   {
@@ -296,8 +294,6 @@ export const hostInventoryItem = pgTable(
     ),
   })
 );
-
-export type HostInventoryItem = InferSelectModel<typeof hostInventoryItem>;
 
 export const hostFinding = pgTable(
   "HostFinding_v1",

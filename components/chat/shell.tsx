@@ -8,9 +8,9 @@ import {
   useArtifact,
   useArtifactSelector,
 } from "@/hooks/use-artifact";
-import { getShellViewFromPathname } from "@/lib/security/shell-view";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { getShellViewFromPathname } from "@/src/domain/reporting/services/shell-view";
 import { ReportDashboard } from "../report/report-dashboard";
 import { Artifact } from "./artifact";
 import { ChatHeader } from "./chat-header";

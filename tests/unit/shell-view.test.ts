@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
-import { getShellViewFromPathname } from "@/lib/security/shell-view";
+import { getShellViewFromPathname } from "@/src/domain/reporting/services/shell-view";
 
 describe("shell view routing", () => {
   test("uses report view for root path", () => {

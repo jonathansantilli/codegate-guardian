@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
-import { extractNormalizedScanRunsFromMessage } from "@/lib/security/report-normalization";
+import { extractNormalizedScanRunsFromMessage } from "@/src/domain/scan/services/report-normalization";
 
 describe("report normalization", () => {
   test("extracts a repository scan run and normalizes findings", () => {

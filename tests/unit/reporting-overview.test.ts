@@ -5,7 +5,7 @@ import {
   classifyArtifactType,
   extractRepositoryOwner,
   type ReportSeverity,
-} from "@/lib/security/reporting-overview";
+} from "@/src/domain/reporting/services/reporting-overview";
 
 type TestRun = {
   id: string;

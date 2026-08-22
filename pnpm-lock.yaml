@@ -194,9 +194,6 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.1.16)
-      use-stick-to-bottom:
-        specifier: ^1.1.1
-        version: 1.1.1(react@19.0.1)
       usehooks-ts:
         specifier: ^3.1.0
         version: 3.1.1(react@19.0.1)
@@ -5106,11 +5103,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  use-stick-to-bottom@1.1.1:
-    resolution: {integrity: sha512-JkDp0b0tSmv7HQOOpL1hT7t7QaoUBXkq045WWWOFDTlLGRzgIIyW7vyzOIJzY7L2XVIG7j1yUxeDj2LHm9Vwng==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   use-sync-external-store@1.4.0:
     resolution: {integrity: sha512-9WXSPC5fMv61vaupRkCKCxsPxBocVnwakBEkMIHHpkTTg6icbJtg6jzgtLDm4bl3cSHAca52rYWih0k4K3PfHw==}
@@ -10578,10 +10570,6 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       '@types/react': 18.3.18
-
-  use-stick-to-bottom@1.1.1(react@19.0.1):
-    dependencies:
-      react: 19.0.1
 
   use-sync-external-store@1.4.0(react@19.0.1):
     dependencies:

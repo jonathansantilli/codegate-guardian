@@ -36,6 +36,7 @@ import type {
   InventoryItemKind,
   InventoryScope,
 } from "@/src/domain/fleet/entities/host";
+import { severityRank } from "@/src/domain/scan/value-objects/severity";
 import type { DrizzleDb } from "../client";
 import {
   activityEvent,
@@ -56,19 +57,6 @@ const ITEM_INSERT_CHUNK = 500;
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
-}
-
-const SEVERITY_ORDER: Record<string, number> = {
-  CRITICAL: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-  INFO: 4,
-};
-
-/** Worst first. An unknown severity sorts last rather than first. */
-function severityRank(severity: string): number {
-  return SEVERITY_ORDER[severity.toUpperCase()] ?? Number.MAX_SAFE_INTEGER;
 }
 
 /** Reports kept on a machine's history panel. */
@@ -1047,7 +1035,7 @@ export class DrizzleFleetRepository implements FleetRepository {
           hasGap(carried, reportsByHost)
         ),
       }))
-      .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+      .sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
   }
 
   async acknowledgeFinding(input: {
