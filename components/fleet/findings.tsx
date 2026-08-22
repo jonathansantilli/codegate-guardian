@@ -6,16 +6,19 @@ import { toast } from "sonner";
 import useSWR, { mutate } from "swr";
 import {
   isOutstanding,
+  SEVERITY_ORDER,
   STATUS_LABEL,
   severityRank,
   statusExplanation,
 } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { formatRelativeTime } from "@/lib/security/fleet-presentation";
 import { fetcher } from "@/lib/utils";
 import type { FindingStatus } from "@/src/application/ports/fleet/fleet-repository";
 import { EvidenceView } from "./evidence-view";
 import { Ic } from "./icons";
 import { LifecycleTrack } from "./lifecycle-track";
+import { SuppressDialog, type SuppressTarget } from "./suppress-dialog";
 import { Badge, Card, CardHead, Empty, KV, Loading, Sev, sevColor } from "./ui";
 
 /**
@@ -26,8 +29,6 @@ import { Badge, Card, CardHead, Empty, KV, Loading, Sev, sevColor } from "./ui";
  * nothing here has a "mark as done" — the only mutable bit is an
  * acknowledgement, which records that a person took responsibility.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Finding = {
   fingerprint: string;
@@ -58,7 +59,25 @@ type Attention = {
 
 type Host = { host: { id: string; hostname: string; lastSeenAt: string } };
 
-type StatusFilter = "all" | FindingStatus;
+type Suppression = {
+  id: string;
+  scope: "fleet" | "machine";
+  hostId: string | null;
+  fingerprint: string | null;
+  ruleId: string | null;
+  reason: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string | null;
+  blastRadius: number;
+};
+
+/**
+ * "Suppressed" is not a finding status — a suppression is a separate record
+ * that hides findings from the queue. It sits beside the statuses because
+ * that is where an operator looks for what they silenced.
+ */
+type StatusFilter = "all" | FindingStatus | "suppressed";
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -66,28 +85,29 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "acknowledged", label: "Acknowledged" },
   { key: "regressed", label: "Regressed" },
   { key: "resolved", label: "Resolved" },
+  { key: "suppressed", label: "Suppressed" },
 ];
-
-const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 
 export function FindingsScreen() {
   const { data, isLoading } = useSWR<{ findings: Finding[] }>(
-    `${base}/api/fleet/findings`,
+    `${API_BASE}/findings`,
     fetcher,
     { refreshInterval: 30_000 }
   );
   const { data: attentionData } = useSWR<{ attention: Attention[] }>(
-    `${base}/api/fleet/attention`,
+    `${API_BASE}/attention`,
     fetcher
   );
-  const { data: hostData } = useSWR<{ hosts: Host[] }>(
-    `${base}/api/fleet`,
+  const { data: hostData } = useSWR<{ hosts: Host[] }>(`${API_BASE}`, fetcher);
+  const { data: suppressionData } = useSWR<{ suppressions: Suppression[] }>(
+    `${API_BASE}/suppressions`,
     fetcher
   );
 
   const [status, setStatus] = useState<StatusFilter | null>(null);
   const [severity, setSeverity] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [suppressing, setSuppressing] = useState<SuppressTarget | null>(null);
 
   if (isLoading) {
     return <Loading label="Loading findings…" />;
@@ -131,12 +151,19 @@ export function FindingsScreen() {
     );
   }
 
+  const live = (suppressionData?.suppressions ?? []).filter(
+    (sup) =>
+      sup.expiresAt === null || new Date(sup.expiresAt).getTime() > Date.now()
+  );
+
   const statusCounts = STATUS_FILTERS.map((f) => ({
     ...f,
     count:
       f.key === "all"
         ? findings.length
-        : findings.filter((x) => x.status === f.key).length,
+        : f.key === "suppressed"
+          ? live.length
+          : findings.filter((x) => x.status === f.key).length,
   }));
 
   const visible = findings
@@ -151,7 +178,7 @@ export function FindingsScreen() {
   );
 
   async function acknowledge(finding: Finding, hostId: string) {
-    const response = await fetch(`${base}/api/fleet/acknowledge`, {
+    const response = await fetch(`${API_BASE}/acknowledge`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ hostId, fingerprint: finding.fingerprint }),
@@ -161,7 +188,7 @@ export function FindingsScreen() {
       toast.success(
         "Acknowledged. It closes when a later report no longer carries it."
       );
-      mutate(`${base}/api/fleet/findings`);
+      mutate(`${API_BASE}/findings`);
     } else {
       toast.error("Could not record the acknowledgement.");
     }
@@ -201,7 +228,7 @@ export function FindingsScreen() {
             margin: "0 2px",
           }}
         />
-        {SEVERITIES.map((sev) => {
+        {SEVERITY_ORDER.map((sev) => {
           const count = findings.filter((f) => f.severity === sev).length;
           if (count === 0) {
             return null;
@@ -226,7 +253,7 @@ export function FindingsScreen() {
         })}
       </div>
 
-      {outstanding.length === 0 && (
+      {outstanding.length === 0 && filter !== "suppressed" && (
         <div
           style={{
             display: "flex",
@@ -248,9 +275,12 @@ export function FindingsScreen() {
         </div>
       )}
 
+      {filter === "suppressed" && <SuppressionList suppressions={live} />}
+
       <div
+        hidden={filter === "suppressed"}
         style={{
-          display: "grid",
+          display: filter === "suppressed" ? "none" : "grid",
           gridTemplateColumns: "352px minmax(0,1fr)",
           gap: "16px",
           flex: 1,
@@ -377,6 +407,19 @@ export function FindingsScreen() {
                   gap: "8px",
                 }}
               >
+                <button
+                  className="btn sm btn-outline"
+                  onClick={() =>
+                    setSuppressing({
+                      fingerprint: current.fingerprint,
+                      label: `${current.ruleId} — ${current.description}`,
+                      blastRadius: current.machineCount,
+                    })
+                  }
+                  type="button"
+                >
+                  Suppress
+                </button>
                 {presentOn[0] && (
                   <Link
                     className="btn sm btn-primary"
@@ -568,6 +611,112 @@ export function FindingsScreen() {
           </Card>
         )}
       </div>
+
+      {suppressing && (
+        <SuppressDialog
+          onClose={() => setSuppressing(null)}
+          target={suppressing}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * What has been silenced, and by whom.
+ *
+ * A suppression that cannot be found again is a permanent blind spot, so it
+ * is listed with its reason, its blast radius and a way to lift it. Revoking
+ * one does not touch any machine — it only stops hiding what they report.
+ */
+function SuppressionList({ suppressions }: { suppressions: Suppression[] }) {
+  async function revoke(id: string) {
+    const response = await fetch(`${API_BASE}/suppressions?id=${id}`, {
+      method: "DELETE",
+    });
+    if (response.ok) {
+      toast.success("Revoked. Anything it was hiding is back in the queue.");
+      mutate(`${API_BASE}/suppressions`);
+      mutate(`${API_BASE}/findings`);
+      mutate(`${API_BASE}/attention`);
+    } else {
+      toast.error("Could not revoke the suppression.");
+    }
+  }
+
+  return (
+    <Card grow style={{ overflow: "hidden" }}>
+      <CardHead
+        note="A suppression hides a finding here; the machine still reports it"
+        title="Suppressed"
+      />
+      {suppressions.length === 0 ? (
+        <p style={{ padding: "16px", fontSize: "12.5px", color: "var(--fg3)" }}>
+          Nothing is suppressed. Every finding a machine reports reaches this
+          queue.
+        </p>
+      ) : (
+        <div style={{ overflow: "auto", minHeight: 0 }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>What is silenced</th>
+                <th>Scope</th>
+                <th>Reason</th>
+                <th>By</th>
+                <th className="r">Expires</th>
+                <th className="r">Machines</th>
+                <th className="r" />
+              </tr>
+            </thead>
+            <tbody>
+              {suppressions.map((sup) => (
+                <tr key={sup.id}>
+                  <td
+                    className="mono trunc"
+                    style={{ fontSize: "12.5px", maxWidth: "240px" }}
+                  >
+                    {sup.ruleId ?? sup.fingerprint}
+                  </td>
+                  <td>
+                    <Badge tone="sec">
+                      {sup.scope === "fleet" ? "Whole fleet" : "One machine"}
+                    </Badge>
+                  </td>
+                  <td
+                    className="trunc"
+                    style={{ fontSize: "12.5px", maxWidth: "300px" }}
+                    title={sup.reason}
+                  >
+                    {sup.reason}
+                  </td>
+                  <td style={{ fontSize: "12.5px", color: "var(--fg3)" }}>
+                    {sup.createdBy}
+                  </td>
+                  <td
+                    className="r mono"
+                    style={{ fontSize: "12px", color: "var(--fg3)" }}
+                  >
+                    {sup.expiresAt
+                      ? new Date(sup.expiresAt).toLocaleDateString()
+                      : "until revoked"}
+                  </td>
+                  <td className="num r">{sup.blastRadius}</td>
+                  <td className="r">
+                    <button
+                      className="btn xs btn-outline"
+                      onClick={() => revoke(sup.id)}
+                      type="button"
+                    >
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

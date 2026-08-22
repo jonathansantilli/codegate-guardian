@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { severityRank } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   formatRelativeTime,
   getHostFreshness,
@@ -12,7 +13,17 @@ import {
 } from "@/lib/security/fleet-presentation";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
-import { Avatar, Badge, Card, Code, Empty, Loading, Sev } from "./ui";
+import {
+  Avatar,
+  Badge,
+  Card,
+  Code,
+  Empty,
+  FRESHNESS_LABEL,
+  FRESHNESS_TONE,
+  Loading,
+  Sev,
+} from "./ui";
 
 /**
  * Every machine running the agent, and the person accountable for it.
@@ -21,8 +32,6 @@ import { Avatar, Badge, Card, Code, Empty, Loading, Sev } from "./ui";
  * hangs off: a row leads to what that machine reported, not to an abstract
  * artifact shared across the fleet.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type HostSummary = {
   host: {
@@ -40,18 +49,6 @@ type HostSummary = {
 
 type Attention = { hostId: string; severity: string };
 
-const FRESHNESS_LABEL: Record<HostFreshness, string> = {
-  online: "Reporting",
-  stale: "Stale",
-  offline: "No recent reports",
-};
-
-const FRESHNESS_TONE: Record<HostFreshness, "ok" | "warn" | "sec"> = {
-  online: "ok",
-  stale: "warn",
-  offline: "sec",
-};
-
 type Filter = "all" | HostFreshness;
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -64,12 +61,12 @@ const FILTERS: { key: Filter; label: string }[] = [
 export function MachinesScreen() {
   const router = useRouter();
   const { data, isLoading } = useSWR<{ hosts: HostSummary[] }>(
-    `${base}/api/fleet`,
+    `${API_BASE}`,
     fetcher,
     { refreshInterval: 30_000 }
   );
   const { data: attentionData } = useSWR<{ attention: Attention[] }>(
-    `${base}/api/fleet/attention`,
+    `${API_BASE}/attention`,
     fetcher
   );
   const [filter, setFilter] = useState<Filter>("all");

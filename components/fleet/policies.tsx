@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import useSWR, { mutate } from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
 import { Card, CardHead, Empty, KV, Loading, Stat } from "./ui";
@@ -13,8 +14,6 @@ import { Card, CardHead, Empty, KV, Loading, Stat } from "./ui";
  * Nothing here reaches a machine. A policy turns reports you already have
  * into a pass or a fail per machine, and the fix happens on the machine.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Policy = {
   id: string;
@@ -81,7 +80,7 @@ const BLANK: Draft = {
 
 export function PoliciesScreen() {
   const { data, isLoading } = useSWR<{ policies: Policy[] }>(
-    `${base}/api/fleet/policies`,
+    `${API_BASE}/policies`,
     fetcher
   );
   const [selected, setSelected] = useState<string | null>(null);
@@ -94,7 +93,7 @@ export function PoliciesScreen() {
 
   async function save(next: Draft) {
     setSaving(true);
-    const response = await fetch(`${base}/api/fleet/policies`, {
+    const response = await fetch(`${API_BASE}/policies`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -111,7 +110,7 @@ export function PoliciesScreen() {
     if (response.ok) {
       toast.success("Saved. It is evaluated against every report from now on.");
       setDraft(null);
-      mutate(`${base}/api/fleet/policies`);
+      mutate(`${API_BASE}/policies`);
     } else {
       const body = await response.json().catch(() => null);
       toast.error(body?.error ?? "Could not save the policy.");

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { HostFreshness } from "@/lib/security/fleet-presentation";
 import { Ic } from "./icons";
 
 /**
@@ -16,6 +17,30 @@ export const SEV_COLOR: Record<string, string> = {
   MEDIUM: "var(--med)",
   LOW: "var(--low)",
   INFO: "var(--info)",
+};
+
+/**
+ * How a machine's reporting state reads. Kept beside `sevColor` because the
+ * machines list and the machine's own page must agree — a laptop that is
+ * "stale" in one place and "offline" in the other is a bug an operator sees
+ * before we do.
+ */
+export const FRESHNESS_LABEL: Record<HostFreshness, string> = {
+  online: "Reporting",
+  stale: "Stale",
+  offline: "No recent reports",
+};
+
+export const FRESHNESS_TONE: Record<HostFreshness, "ok" | "warn" | "sec"> = {
+  online: "ok",
+  stale: "warn",
+  offline: "sec",
+};
+
+export const FRESHNESS_COLOR: Record<HostFreshness, string> = {
+  online: "var(--ok)",
+  stale: "var(--warn)",
+  offline: "var(--fg3)",
 };
 
 export function sevColor(severity: string): string {

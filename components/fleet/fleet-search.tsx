@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
 
@@ -12,8 +13,6 @@ import { Ic } from "./icons";
  * Searches what an operator actually has in mind when they reach for it: a
  * machine, or the person who uses it. Matches jump straight to that machine.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Host = {
   host: {
@@ -28,7 +27,7 @@ export function FleetSearch() {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const { data } = useSWR<{ hosts: Host[] }>(`${base}/api/fleet`, fetcher);
+  const { data } = useSWR<{ hosts: Host[] }>(`${API_BASE}`, fetcher);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { formatRelativeTime } from "@/lib/security/fleet-presentation";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
@@ -13,8 +14,6 @@ import { Card, CardHead, Empty, Loading } from "./ui";
  * Agents and people appear in the same stream deliberately — an operator
  * asking "why did this change" should not have to know which side did it.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type ActivityRecord = {
   id: string;
@@ -67,7 +66,7 @@ const FILTERS: { key: ActorFilter; label: string }[] = [
 
 export function ActivityScreen() {
   const { data, isLoading } = useSWR<{ activity: ActivityRecord[] }>(
-    `${base}/api/fleet/activity`,
+    `${API_BASE}/activity`,
     fetcher,
     { refreshInterval: 30_000 }
   );

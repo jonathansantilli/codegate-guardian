@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import useSWR, { mutate } from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { formatRelativeTime } from "@/lib/security/fleet-presentation";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
@@ -15,8 +16,6 @@ import { Badge, Card, CardHead, Loading } from "./ui";
  * uses are listed as they are, not as a wish list — anything on this page can
  * be driven by a script or an agent with the same call.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type EnrolmentCode = {
   id: string;
@@ -89,7 +88,7 @@ const ENDPOINTS: { method: string; path: string; desc: string }[] = [
     desc: "Author a rule evaluated on report",
   },
   {
-    method: "POST",
+    method: "PUT",
     path: "/api/fleet/owner",
     desc: "Assign a machine's owner and team",
   },
@@ -144,7 +143,7 @@ function Copyable({
 
 export function AccessScreen() {
   const { data, isLoading } = useSWR<{ codes: EnrolmentCode[] }>(
-    `${base}/api/fleet/enrolment`,
+    `${API_BASE}/enrolment`,
     fetcher
   );
   const [minting, setMinting] = useState(false);
@@ -156,7 +155,7 @@ export function AccessScreen() {
 
   async function mint(maxUses: number) {
     setMinting(true);
-    const response = await fetch(`${base}/api/fleet/enrolment`, {
+    const response = await fetch(`${API_BASE}/enrolment`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -168,7 +167,7 @@ export function AccessScreen() {
 
     if (response.ok) {
       toast.success("Code minted. It expires on its own.");
-      mutate(`${base}/api/fleet/enrolment`);
+      mutate(`${API_BASE}/enrolment`);
     } else {
       toast.error("Could not mint a code.");
     }

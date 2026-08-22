@@ -11,6 +11,7 @@ import {
   shortHash,
 } from "@/lib/security/artifact-presentation";
 import { severityRank } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   displayPath,
   formatRelativeTime,
@@ -26,8 +27,6 @@ import { Badge, Card, CardHead, Empty, Loading, Sev } from "./ui";
  * impersonates. Grouping by hash keeps them apart and makes the split
  * visible: one name, several distinct files, each with its own machines.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Variant = {
   contentHash: string;
@@ -60,16 +59,16 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
 
 export function InventoryScreen() {
   const { data, isLoading } = useSWR<{ artifacts: ArtifactGroup[] }>(
-    `${base}/api/fleet/artifacts`,
+    `${API_BASE}/artifacts`,
     fetcher,
     { refreshInterval: 60_000 }
   );
   const { data: findingData } = useSWR<{ findings: Finding[] }>(
-    `${base}/api/fleet/findings`,
+    `${API_BASE}/findings`,
     fetcher
   );
   const { data: hostData } = useSWR<{ hosts: unknown[] }>(
-    `${base}/api/fleet`,
+    `${API_BASE}`,
     fetcher
   );
 
