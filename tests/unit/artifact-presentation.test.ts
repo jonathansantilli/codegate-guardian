@@ -8,6 +8,7 @@ import {
   orderVariants,
   shortHash,
 } from "@/lib/security/artifact-presentation";
+import { artifactName } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/fleet-repository";
 
 const HASH = `sha256:${"a".repeat(56)}bcdef123`;
 
@@ -106,5 +107,27 @@ describe("content hash URLs", () => {
 
   test("leaves an already-prefixed slug alone rather than doubling it", () => {
     assert.equal(hashFromSlug("sha256:abc123"), "sha256:abc123");
+  });
+});
+
+describe("artifactName", () => {
+  test("takes the last segment of a posix path", () => {
+    assert.equal(
+      artifactName("/Users/alice/.claude/skills/podcast/SKILL.md"),
+      "SKILL.md"
+    );
+  });
+
+  test("takes the last segment of a windows path", () => {
+    // A slash-only split would make the whole path the name, so a Windows
+    // machine would never group with anyone.
+    assert.equal(
+      artifactName(String.raw`C:\Users\alice\.claude\skills\podcast\SKILL.md`),
+      "SKILL.md"
+    );
+  });
+
+  test("returns the path itself when there is no separator", () => {
+    assert.equal(artifactName("AGENTS.md"), "AGENTS.md");
   });
 });

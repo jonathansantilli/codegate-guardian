@@ -42,6 +42,8 @@ type Overview = {
   untriagedFindings: number;
   checkInsPerHour: { hour: string; count: number }[];
   lastCheckInAt: string | null;
+  machinesWithFindings: number;
+  attentionTotal: number;
   rejections: {
     hostname: string;
     owner: string | null;
@@ -97,8 +99,15 @@ export function OverviewScreen() {
     overview.contentFeed.ageDays !== null &&
     overview.contentFeed.ageDays >= FEED_STALE_DAYS;
 
-  if (overview.rejections.length > 0 || feedStale) {
-    return <Degraded overview={overview} />;
+  // A revoked machine keeps reporting and keeps being refused: that is
+  // revocation working, not a service outage, so it must not replace the
+  // console with a Problems screen that then lists nothing.
+  const faults = overview.rejections.filter(
+    (rejection) => !rejection.reason.includes("enrolment_revoked")
+  );
+
+  if (faults.length > 0 || feedStale) {
+    return <Degraded faults={faults} overview={overview} />;
   }
 
   return (
@@ -372,13 +381,16 @@ function Problem({
   );
 }
 
-function Degraded({ overview }: { overview: Overview }) {
-  const noToken = overview.rejections.some((r) =>
-    r.reason.includes("no_token_configured")
-  );
-  const badToken = overview.rejections.some((r) =>
-    r.reason.includes("invalid_token")
-  );
+function Degraded({
+  overview,
+  faults,
+}: {
+  overview: Overview;
+  /** Rejections that mean something is broken, not that revocation worked. */
+  faults: Overview["rejections"];
+}) {
+  const noToken = faults.some((r) => r.reason.includes("no_token_configured"));
+  const badToken = faults.some((r) => r.reason.includes("unknown_token"));
   const feedDays = overview.contentFeed.ageDays;
   const feedStale = feedDays !== null && feedDays >= FEED_STALE_DAYS;
   const problems = [noToken, badToken, feedStale].filter(Boolean).length;
@@ -461,7 +473,7 @@ function Degraded({ overview }: { overview: Overview }) {
           label="Rejected check-ins"
           sub="last hour"
           tone="var(--crit)"
-          value={overview.rejections.length}
+          value={faults.length}
         />
         <Stat
           label="Feed age"
@@ -471,7 +483,7 @@ function Degraded({ overview }: { overview: Overview }) {
         />
       </StatGrid>
 
-      {overview.rejections.length > 0 && (
+      {faults.length > 0 && (
         <Card grow>
           <CardHead
             note="What machines tried to send and why it was turned away"
@@ -488,7 +500,7 @@ function Degraded({ overview }: { overview: Overview }) {
                 </tr>
               </thead>
               <tbody>
-                {overview.rejections.map((row) => (
+                {faults.map((row) => (
                   <tr key={`${row.hostname}-${row.at}`}>
                     <td style={{ fontWeight: 500 }}>{row.hostname}</td>
                     <td
@@ -604,6 +616,10 @@ function Active({
   policies: Policy[];
 }) {
   const worst = attention.slice(0, 6);
+  const passing = Math.max(
+    0,
+    overview.hostsEnrolled - overview.machinesWithFindings
+  );
 
   return (
     <>
@@ -621,16 +637,21 @@ function Active({
         />
         <Stat
           label="Machines passing all policies"
-          sub={`${overview.hostsEnrolled - new Set(attention.map((a) => a.hostId)).size} of ${overview.hostsEnrolled}`}
+          // Counted server-side over the whole fleet. Deriving it from the
+          // attention list read "75% passing" on 200 machines that all failed,
+          // because that list stops at 50.
+          sub={`${passing} of ${overview.hostsEnrolled}`}
           value={
             overview.hostsEnrolled === 0
               ? "—"
-              : `${Math.round(((overview.hostsEnrolled - new Set(attention.map((a) => a.hostId)).size) / overview.hostsEnrolled) * 100)}%`
+              : `${Math.round((passing / overview.hostsEnrolled) * 100)}%`
           }
         />
         <Stat
-          label="Untriaged findings"
-          sub={`of ${overview.openFindings} open`}
+          label="Untriaged"
+          // Machine-and-finding pairs, matching the queue below it, because
+          // acknowledging is something you do per machine.
+          sub={`of ${overview.attentionTotal} to act on`}
           value={overview.untriagedFindings}
         />
       </StatGrid>
@@ -647,7 +668,7 @@ function Active({
               <Badge tone="crit">{attention.length}</Badge>
             ) : undefined
           }
-          note="One row per finding, grouped by machine"
+          note="One row per machine per finding — a laptop each to fix"
           title="Act on these first"
         />
         {worst.length === 0 ? (

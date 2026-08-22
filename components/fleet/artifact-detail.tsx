@@ -34,7 +34,7 @@ type Variant = {
     hostname: string;
     owner: string | null;
     team: string | null;
-    path: string;
+    paths: string[];
     lastSeenAt: string;
   }[];
   siblings: {
@@ -92,7 +92,7 @@ export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
       contentHash: data.contentHash,
       machineCount: data.machines.length,
       firstSeenAt: data.firstSeenAt,
-      paths: [...new Set(data.machines.map((m) => m.path))],
+      paths: [...new Set(data.machines.flatMap((m) => m.paths))],
       here: true,
     },
     ...data.siblings.map((s) => ({ ...s, here: false })),
@@ -354,9 +354,15 @@ export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
                         color: "var(--fg2)",
                         maxWidth: "240px",
                       }}
-                      title={machine.path}
+                      title={machine.paths.join("\n")}
                     >
-                      {displayPath(machine.path)}
+                      {displayPath(machine.paths[0] ?? "")}
+                      {machine.paths.length > 1 && (
+                        <span style={{ color: "var(--fg3)" }}>
+                          {" "}
+                          +{machine.paths.length - 1} more
+                        </span>
+                      )}
                     </td>
                     <td
                       className="r mono"

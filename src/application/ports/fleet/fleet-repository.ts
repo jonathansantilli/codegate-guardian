@@ -171,6 +171,16 @@ export type FleetOverview = {
   untriagedFindings: number;
   /** Reports received per hour over the last 24, oldest first. */
   checkInsPerHour: { hour: Date; count: number }[];
+  /**
+   * Machines with at least one open finding, and machines evaluated at all.
+   *
+   * Counted over the whole fleet rather than derived in the browser from the
+   * attention list, which is capped — a fleet where every machine fails read
+   * as mostly passing once it grew past the cap.
+   */
+  machinesWithFindings: number;
+  /** How many attention rows exist in total, capped list or not. */
+  attentionTotal: number;
   /** When the newest accepted report arrived, or null if none ever has. */
   lastCheckInAt: Date | null;
   /** Reports rejected in the last hour, and why. Empty when ingest is healthy. */
@@ -225,7 +235,8 @@ export type ArtifactVariantDetail = {
     hostname: string;
     owner: string | null;
     team: string | null;
-    path: string;
+    /** Every path this machine carries these exact bytes at. */
+    paths: string[];
     lastSeenAt: Date;
   }[];
   siblings: ArtifactVariant[];

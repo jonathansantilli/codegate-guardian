@@ -290,6 +290,7 @@ export function FindingsScreen() {
         <Card grow style={{ overflow: "hidden" }}>
           <CardHead
             badge={<Badge tone="sec">{visible.length}</Badge>}
+            note="Distinct findings; a finding on three machines is one row"
             title={
               filter === "all"
                 ? "All findings"

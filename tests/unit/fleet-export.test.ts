@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
+import { toPath } from "@/components/fleet/check-in-chart";
 import {
   csvField,
   exportFilename,
@@ -84,5 +85,32 @@ describe("export parameters", () => {
       exportFilename("machines", "csv", new Date("2026-08-22T18:00:00Z")),
       "guardian-machines-2026-08-22.csv"
     );
+  });
+});
+
+describe("check-in chart geometry", () => {
+  const HOUR = 60 * 60 * 1000;
+  const NOW = new Date("2026-08-22T12:00:00Z");
+
+  test("a fleet that went silent six hours ago falls to zero at the right edge", () => {
+    // Buckets from 24h ago to 6h ago, then nothing.
+    const points = Array.from({ length: 18 }, (_, i) => ({
+      hour: new Date(NOW.getTime() - (24 - i) * HOUR).toISOString(),
+      count: 10,
+    }));
+
+    const { line } = toPath(points, 24, NOW);
+    const ys = line
+      .split(/[ML]/)
+      .filter(Boolean)
+      .map((pair) => Number(pair.trim().split(" ")[1]));
+
+    // Larger y is lower on the canvas: the last points must sit at the floor.
+    assert.equal(ys.at(-1), 119);
+    assert.ok(ys[0] < 119, "the populated hours should not be at the floor");
+  });
+
+  test("an empty series draws nothing rather than a misleading line", () => {
+    assert.deepEqual(toPath([], 24, NOW), { line: "", area: "", peak: null });
   });
 });
