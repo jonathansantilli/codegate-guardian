@@ -68,51 +68,14 @@ export const REJECTION_NO_TOKEN = "401 no_token_configured";
 export const REJECTION_INVALID_TOKEN = "401 unknown_token";
 export const REJECTION_REVOKED = "403 enrolment_revoked";
 
-/** Longest hostname worth keeping from an unauthenticated caller. */
-const MAX_REJECTED_HOSTNAME = 64;
-
 /**
- * Records a check-in that was refused.
+ * How long one refusal stands for all the others like it.
  *
- * The body is unauthenticated, so only a length-capped hostname is taken from
- * it and only when the request is small enough to be a real report; anything
- * unreadable is recorded as an unnamed machine rather than not at all.
+ * The operator needs to know check-ins are being refused and why; they do not
+ * need one row per attempt, and an unauthenticated caller must not be able to
+ * write enough of them to push the rest of the audit trail out of view.
  */
-async function recordRejection(
-  container: ReturnType<typeof getContainer>,
-  request: Request,
-  { reason }: { reason: string }
-): Promise<void> {
-  let hostname = "unknown machine";
-
-  const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (declaredLength > 0 && declaredLength <= MAX_BODY_BYTES) {
-    try {
-      const body = (await request.json()) as { host?: { hostname?: unknown } };
-      const reported = body?.host?.hostname;
-      if (typeof reported === "string" && reported.trim()) {
-        hostname = reported.trim().slice(0, MAX_REJECTED_HOSTNAME);
-      }
-    } catch {
-      // Unreadable body from an unauthenticated caller. The rejection still
-      // matters; the name it claimed does not.
-    }
-  }
-
-  try {
-    await container.ports.fleet.recordActivity({
-      occurredAt: new Date(),
-      actorKind: "agent",
-      actorName: hostname,
-      action: "Check-in rejected",
-      target: null,
-      result: reason,
-      apiCall: "POST /api/agent/report",
-    });
-  } catch {
-    // Never let bookkeeping turn a 401 into a 500.
-  }
-}
+const REJECTION_WINDOW_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   const container = getContainer();
@@ -130,10 +93,12 @@ export async function POST(request: Request) {
     // A rejected check-in is the single most useful thing an operator can see
     // when nothing is arriving, so it is recorded rather than dropped: the
     // console can then say which machines tried and why they were turned away.
-    await recordRejection(container, request, {
+    await container.ports.fleet.recordRejectionThrottled({
       reason: container.env.AGENT_INGEST_TOKEN
         ? REJECTION_INVALID_TOKEN
         : REJECTION_NO_TOKEN,
+      at: new Date(),
+      windowMs: REJECTION_WINDOW_MS,
     });
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

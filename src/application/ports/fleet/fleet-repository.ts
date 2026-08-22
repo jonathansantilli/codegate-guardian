@@ -144,6 +144,15 @@ export type HostReportSummary = {
 };
 
 /**
+ * Enrolment either binds a machine to a new token, or refuses because that
+ * machine is already enrolled and healthy — taking it over would lock out the
+ * machine that holds the current token.
+ */
+export type EnrolHostResult =
+  | { outcome: "enrolled"; hostId: string }
+  | { outcome: "already-enrolled" };
+
+/**
  * One row of "act on these first": a machine, the person accountable for it,
  * and the reason — in that order, because an operator acts on a person's
  * laptop and not on an abstract rule.
@@ -379,7 +388,7 @@ export type FleetRepository = {
     machineId: string;
     tokenHash: string;
     enrolledAt: Date;
-  }): Promise<{ hostId: string }>;
+  }): Promise<EnrolHostResult>;
   /** Machines and people needing attention, worst first. */
   listAttention(limit?: number): Promise<AttentionRow[]>;
   /** The overview's headline numbers in one round trip. */
@@ -411,6 +420,19 @@ export type FleetRepository = {
     now: Date;
   }): Promise<{ id: string } | null>;
   recordActivity(input: RecordActivityInput): Promise<void>;
+  /**
+   * Notes that a check-in was refused, at most once per reason per window.
+   *
+   * Refusals come from callers with no credential, so the row cannot carry
+   * anything they said — an attacker who could write one row per request
+   * could push every other entry out of the activity view, which is the only
+   * record that a machine was taken over.
+   */
+  recordRejectionThrottled(input: {
+    reason: string;
+    at: Date;
+    windowMs: number;
+  }): Promise<void>;
   listActivity(limit?: number): Promise<ActivityRecord[]>;
   savePolicy(input: SavePolicyInput): Promise<{ id: string }>;
   listPolicies(): Promise<PolicyRecord[]>;

@@ -119,12 +119,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Apply database migrations
         run: pnpm db:migrate
-      - name: Build
-        run: pnpm build
-      - name: Start the server
-        run: |
-          pnpm start &
-          npx wait-on http://localhost:3000/ping --timeout 120000
+      # Playwright's webServer builds and starts the app; starting it here as
+      # well is what made this job abort before any test ran.
       - name: Run E2E
         run: pnpm test:e2e
       - uses: actions/upload-artifact@v4

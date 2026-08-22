@@ -486,15 +486,13 @@ function Degraded({
       {faults.length > 0 && (
         <Card grow>
           <CardHead
-            note="What machines tried to send and why it was turned away"
+            note="A refused check-in carries no identity — only why it was refused"
             title="Recent rejections"
           />
           <div style={{ overflow: "auto", minHeight: 0 }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Machine</th>
-                  <th>Owner</th>
                   <th>Reason</th>
                   <th className="r">When</th>
                 </tr>

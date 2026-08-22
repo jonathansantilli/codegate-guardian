@@ -98,10 +98,17 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
+  // Playwright owns the server, in CI and locally. Having CI start it too
+  // aborted the whole run: reuseExistingServer was false under CI, so the
+  // config refused a port that CI's own step had already bound — and no test
+  // executed. `pnpm start` also serves the production build, which is what
+  // this suite should be asserting against.
   webServer: {
-    command: "pnpm dev",
+    command: "pnpm build && pnpm start",
     url: `${baseURL}/ping`,
-    timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
+    timeout: 240 * 1000,
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });

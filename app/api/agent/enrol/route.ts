@@ -68,11 +68,31 @@ export async function POST(request: Request) {
   const token = mintMachineToken();
   const enrolledAt = new Date();
 
-  await container.ports.fleet.enrolHost({
+  const result = await container.ports.fleet.enrolHost({
     machineId: parsed.data.machineId,
     tokenHash: hashMachineToken(token),
     enrolledAt,
   });
+
+  if (result.outcome === "already-enrolled") {
+    await container.ports.fleet.recordActivity({
+      occurredAt: enrolledAt,
+      actorKind: "agent",
+      actorName: parsed.data.machineId,
+      action: "Enrolment refused",
+      target: "machine is already enrolled",
+      result: "409 already_enrolled",
+      apiCall: "POST /api/agent/enrol",
+    });
+
+    return Response.json(
+      {
+        error:
+          "That machine is already enrolled. An operator must revoke it before it can enrol again.",
+      },
+      { status: 409 }
+    );
+  }
 
   await container.ports.fleet.recordActivity({
     occurredAt: enrolledAt,

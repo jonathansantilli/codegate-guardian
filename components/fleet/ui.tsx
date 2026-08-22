@@ -46,10 +46,18 @@ export const FRESHNESS_TONE: Record<HostFreshness, "ok" | "warn" | "sec"> = {
  */
 export function machineStatus(
   freshness: HostFreshness,
-  revokedAt: string | Date | null
+  revokedAt: string | Date | null,
+  /** Null when the machine has enrolled but never sent a report. */
+  lastCollectedAt?: string | Date | null
 ): { label: string; tone: "ok" | "warn" | "sec"; color: string } {
   if (revokedAt) {
     return { label: "Revoked", tone: "sec", color: "var(--fg3)" };
+  }
+  if (lastCollectedAt === null) {
+    // Enrolment stamps lastSeenAt, so freshness alone reads a machine that
+    // has never checked in as healthy — on a console whose main question is
+    // which machines have gone quiet.
+    return { label: "Never reported", tone: "warn", color: "var(--warn)" };
   }
   return {
     label: FRESHNESS_LABEL[freshness],

@@ -255,4 +255,58 @@ test.describe("Feature: a machine can only report as itself", () => {
     await page.goto("/fleet");
     expect(await report(page, "cgm_not-a-real-token", "whoever", [])).toBe(401);
   });
+
+  test("enrolment cannot seize a machine that already exists", async ({
+    page,
+  }) => {
+    await page.goto("/fleet");
+    const machineId = `e2e-seize-${Date.now()}`;
+
+    const victimToken = await enrol(page, machineId);
+    expect(await report(page, victimToken, machineId, [])).toBe(200);
+
+    // A second enrolment claiming the same id must be refused outright —
+    // otherwise anyone holding a cohort code takes the machine over, locking
+    // the real one out and inheriting its findings.
+    const seized = await page.evaluate(async (m) => {
+      const code = await fetch("/api/fleet/enrolment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ maxUses: 1, label: "e2e-seize" }),
+      })
+        .then((r) => r.json())
+        .then((b) => b.code);
+
+      const response = await fetch("/api/agent/enrol", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, machineId: m }),
+      });
+      return response.status;
+    }, machineId);
+
+    expect(seized).toBe(409);
+    // And the real machine still works.
+    expect(await report(page, victimToken, machineId, [])).toBe(200);
+  });
+});
+
+test.describe("Feature: registration closes behind the first operator", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("an anonymous visitor cannot create an account once one exists", async ({
+    page,
+  }) => {
+    // The setup project has already registered the operator, so this instance
+    // is claimed. Reaching the port must not be one POST from full authority.
+    await page.goto("/register");
+    await page
+      .getByPlaceholder("you@someo.ne")
+      .fill(`refused-${Date.now()}@example.test`);
+    await page.getByLabel("Password").fill("hunter2hunter2");
+    await page.getByRole("button", { name: "Sign up", exact: true }).click();
+
+    await expect(page.getByText(/already has an operator/)).toBeVisible();
+    await expect(page).toHaveURL(/\/register/);
+  });
 });

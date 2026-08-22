@@ -45,6 +45,7 @@ type HostSummary = {
   };
   itemsTotal: number;
   toolNames: string[];
+  lastCollectedAt: string | null;
 };
 
 type Attention = { hostId: string; severity: string };
@@ -222,7 +223,8 @@ export function MachinesScreen() {
               {visible.map((entry) => {
                 const status = machineStatus(
                   getHostFreshness(new Date(entry.host.lastSeenAt)),
-                  entry.host.revokedAt
+                  entry.host.revokedAt,
+                  entry.lastCollectedAt
                 );
                 const severities = bySeverity.get(entry.host.id) ?? [];
                 const worst = [...severities].sort(
@@ -258,7 +260,9 @@ export function MachinesScreen() {
                           }}
                         >
                           <span style={{ fontWeight: 500 }}>
-                            {entry.host.hostname}
+                            {entry.lastCollectedAt === null
+                              ? "Awaiting first report"
+                              : entry.host.hostname}
                           </span>
                           <span
                             className="trunc"

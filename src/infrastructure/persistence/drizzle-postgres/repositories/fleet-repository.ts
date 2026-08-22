@@ -14,6 +14,7 @@ import type {
   ArtifactVariant,
   ArtifactVariantDetail,
   AttentionRow,
+  EnrolHostResult,
   EnrolmentCodeSummary,
   FindingStatus,
   FleetFinding,
@@ -412,6 +413,9 @@ export class DrizzleFleetRepository implements FleetRepository {
   }
 
   async restoreHost({ hostId }: { hostId: string }): Promise<void> {
+    // The machine keeps the token it was issued: restoring means this server
+    // accepts its reports again. Clearing the credential would strand it —
+    // unable to report, and unable to enrol because its row still exists.
     await this.db
       .update(host)
       .set({ revokedAt: null, revokedBy: null })
@@ -435,10 +439,28 @@ export class DrizzleFleetRepository implements FleetRepository {
     machineId: string;
     tokenHash: string;
     enrolledAt: Date;
-  }): Promise<{ hostId: string }> {
-    // A machine that enrols again keeps its history and its findings; only
-    // the credential changes. Re-enrolling also lifts a revocation, because
-    // redeeming a fresh code is an operator's deliberate act.
+  }): Promise<EnrolHostResult> {
+    // Enrolling can bind a machine that has no token yet, or re-bind one an
+    // operator has revoked — both deliberate. What it must NOT do is rebind a
+    // machine that is enrolled and healthy: a machineId is a claim in an
+    // unauthenticated request body, so an upsert let anyone holding a code
+    // overwrite another machine's token. That locked the real machine out and
+    // handed its identity — and the power to resolve its findings — away.
+    // Enrolment CREATES machines; it never re-binds one. A machineId is a
+    // claim in an unauthenticated body, so re-binding let anyone holding a
+    // cohort code — which every machine in that cohort holds by design —
+    // seize an existing machine: the real one is locked out silently, and the
+    // attacker inherits its identity and can resolve its findings. It also
+    // let a revoked machine lift its own revocation, which is precisely the
+    // machine we have decided not to trust.
+    //
+    // Guarded on the row existing, not on it having a token: hosts enrolled
+    // before per-machine tokens have none, and were the least protected.
+    const existing = await this.findHostByMachineId(machineId);
+    if (existing) {
+      return { outcome: "already-enrolled" };
+    }
+
     const [row] = await this.db
       .insert(host)
       .values({
@@ -460,7 +482,7 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .returning({ id: host.id });
 
-    return { hostId: row.id };
+    return { outcome: "enrolled", hostId: row.id };
   }
 
   async findHostByMachineId(machineId: string) {
@@ -1390,6 +1412,47 @@ export class DrizzleFleetRepository implements FleetRepository {
 
     return row ? { id: row.id } : null;
   }
+  async recordRejectionThrottled({
+    reason,
+    at,
+    windowMs,
+  }: {
+    reason: string;
+    at: Date;
+    windowMs: number;
+  }): Promise<void> {
+    const since = new Date(at.getTime() - windowMs);
+
+    const [recent] = await this.db
+      .select({ id: activityEvent.id })
+      .from(activityEvent)
+      .where(
+        and(
+          eq(activityEvent.action, CHECK_IN_REJECTED),
+          eq(activityEvent.result, reason),
+          gt(activityEvent.occurredAt, since)
+        )
+      )
+      .limit(1);
+
+    if (recent) {
+      return;
+    }
+
+    await this.db.insert(activityEvent).values({
+      occurredAt: at,
+      actorKind: "agent",
+      // Deliberately not the hostname the caller claimed: an unauthenticated
+      // request has no identity, and letting it name itself here let an
+      // attacker both flood and mislabel the audit trail.
+      actorName: "unidentified machine",
+      action: CHECK_IN_REJECTED,
+      target: null,
+      result: reason,
+      apiCall: "POST /api/agent/report",
+    });
+  }
+
   async recordActivity(input: RecordActivityInput): Promise<void> {
     await this.db.insert(activityEvent).values(input);
   }
