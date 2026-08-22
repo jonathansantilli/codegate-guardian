@@ -41,6 +41,41 @@ export const inventoryItemSchema = z.object({
   resolved_against: boundedString.optional(),
 });
 
+export const SEVERITIES = [
+  "CRITICAL",
+  "HIGH",
+  "MEDIUM",
+  "LOW",
+  "INFO",
+] as const;
+const MAX_FINDINGS = 5000;
+
+/**
+ * A finding as the codegate scanner emits it, narrowed to what the console
+ * shows. The raw finding rides along untouched so the server never has to
+ * guess at a field it does not yet display.
+ */
+export const findingSchema = z.object({
+  finding_id: boundedString.min(1),
+  rule_id: boundedString.min(1),
+  fingerprint: boundedString.optional(),
+  severity: z.enum(SEVERITIES),
+  category: boundedString.optional(),
+  layer: boundedString.optional(),
+  file_path: z.string().max(MAX_PATH).optional(),
+  /** Hash of the file the finding sits on, tying it to an artifact variant. */
+  sha256: z.string().regex(CONTENT_HASH).optional(),
+  line: z.number().int().nonnegative().optional(),
+  column: z.number().int().nonnegative().optional(),
+  description: boundedString,
+  evidence: boundedString.optional(),
+  owasp: z.array(boundedString).max(32).default([]),
+  cwe: boundedString.optional(),
+  confidence: boundedString.optional(),
+  fixable: z.boolean().optional(),
+  suppressed: z.boolean().optional(),
+});
+
 export const inventorySummarySchema = z.object({
   kb_version: boundedString.optional(),
   tools: z
@@ -70,7 +105,15 @@ export const agentReportPayloadSchema = z.object({
   /** Agent-side collection time; the server records its own receipt time too. */
   collectedAt: z.string().datetime(),
   inventory: inventorySummarySchema,
+  /**
+   * What the scanner found on this machine. Absent when the agent reported
+   * inventory only — which is not the same as "nothing was found", so the
+   * server must not treat a missing list as a clean machine.
+   */
+  findings: z.array(findingSchema).max(MAX_FINDINGS).optional(),
 });
 
 export type AgentReportPayload = z.infer<typeof agentReportPayloadSchema>;
 export type InventoryItemPayload = z.infer<typeof inventoryItemSchema>;
+export type FindingPayload = z.infer<typeof findingSchema>;
+export type Severity = (typeof SEVERITIES)[number];

@@ -249,6 +249,9 @@ export const hostReport = pgTable(
     collectedAt: timestamp("collectedAt").notNull(),
     kbVersion: text("kbVersion"),
     itemsTotal: integer("itemsTotal").notNull().default(0),
+    // Whether this report carried a findings list at all. An inventory-only
+    // report asserts nothing about findings, so it must not resolve any.
+    findingsReported: boolean("findingsReported").notNull().default(false),
     toolsDetected: json("toolsDetected").notNull(),
     createdAt: timestamp("createdAt").notNull(),
   },
@@ -295,3 +298,78 @@ export const hostInventoryItem = pgTable(
 );
 
 export type HostInventoryItem = InferSelectModel<typeof hostInventoryItem>;
+
+export const hostFinding = pgTable(
+  "HostFinding_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    reportId: uuid("reportId")
+      .notNull()
+      .references(() => hostReport.id, { onDelete: "cascade" }),
+    hostId: uuid("hostId")
+      .notNull()
+      .references(() => host.id, { onDelete: "cascade" }),
+    findingId: text("findingId").notNull(),
+    ruleId: text("ruleId").notNull(),
+    // Stable across reports and machines, so a finding can be followed over
+    // time and counted across the fleet. Falls back to the finding id.
+    fingerprint: text("fingerprint").notNull(),
+    severity: varchar("severity", {
+      enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+    }).notNull(),
+    category: text("category"),
+    layer: text("layer"),
+    filePath: text("filePath"),
+    // Ties the finding to the exact bytes it was found in.
+    contentHash: text("contentHash"),
+    line: integer("line"),
+    column: integer("column"),
+    description: text("description").notNull(),
+    evidence: text("evidence"),
+    owasp: json("owasp").notNull(),
+    cwe: text("cwe"),
+    confidence: text("confidence"),
+    fixable: boolean("fixable"),
+    suppressed: boolean("suppressed").notNull().default(false),
+  },
+  (table) => ({
+    reportIdx: index("HostFinding_v1_report_idx").on(table.reportId),
+    hostIdx: index("HostFinding_v1_host_idx").on(table.hostId),
+    fingerprintIdx: index("HostFinding_v1_fingerprint_idx").on(
+      table.fingerprint
+    ),
+    severityIdx: index("HostFinding_v1_severity_idx").on(table.severity),
+  })
+);
+
+export type HostFinding = InferSelectModel<typeof hostFinding>;
+
+/**
+ * An operator saying "seen, I am dealing with it".
+ *
+ * Kept apart from the findings themselves because those are immutable facts
+ * about one report, while this is a mutable decision about a finding on a
+ * machine that outlives any single report.
+ */
+export const findingAcknowledgement = pgTable(
+  "FindingAcknowledgement_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    hostId: uuid("hostId")
+      .notNull()
+      .references(() => host.id, { onDelete: "cascade" }),
+    fingerprint: text("fingerprint").notNull(),
+    acknowledgedBy: text("acknowledgedBy").notNull(),
+    acknowledgedAt: timestamp("acknowledgedAt").notNull(),
+    note: text("note"),
+  },
+  (table) => ({
+    hostFingerprintKey: unique(
+      "FindingAcknowledgement_v1_host_fingerprint_key"
+    ).on(table.hostId, table.fingerprint),
+  })
+);
+
+export type FindingAcknowledgement = InferSelectModel<
+  typeof findingAcknowledgement
+>;

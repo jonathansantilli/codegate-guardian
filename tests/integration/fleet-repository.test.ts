@@ -1,6 +1,9 @@
 import { strict as assert } from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
-import type { RecordHostReportInput } from "@/src/application/ports/fleet/fleet-repository";
+import type {
+  RecordFindingInput,
+  RecordHostReportInput,
+} from "@/src/application/ports/fleet/fleet-repository";
 import { DrizzleFleetRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/fleet-repository";
 import {
   type PostgresHarness,
@@ -331,5 +334,183 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       })
     );
     assert.deepEqual(await repository.listArtifactGroups(), []);
+  });
+});
+
+describe("Feature: finding lifecycle (Drizzle-Postgres)", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    if (harness) await harness.stop();
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  const finding = (
+    overrides: Partial<RecordFindingInput> = {}
+  ): RecordFindingInput => ({
+    findingId: "f-1",
+    ruleId: "known-malicious-content",
+    fingerprint: "sha256:fingerprint-1",
+    severity: "CRITICAL",
+    category: null,
+    layer: null,
+    filePath: "/Users/x/.claude/skills/podcast/SKILL.md",
+    contentHash: `sha256:${"b".repeat(64)}`,
+    line: null,
+    column: null,
+    description: "Skill matches a known-bad indicator",
+    evidence: null,
+    owasp: [],
+    cwe: null,
+    confidence: null,
+    fixable: null,
+    suppressed: false,
+    ...overrides,
+  });
+
+  it("Given a machine reports a finding, when listing, then it is open", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "open");
+    assert.equal(found.machineCount, 1);
+    assert.equal(found.ruleId, "known-malicious-content");
+  });
+
+  // The whole point of a report-only server: absence in a later report is the
+  // only evidence of a fix that can ever exist.
+  it("Given a later report no longer contains the finding, when listing, then it is resolved", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    await repository.recordReport(
+      report({ findings: [], receivedAt: new Date("2026-08-22T18:00:00Z") })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "resolved");
+    assert.equal(found.machineCount, 0);
+  });
+
+  it("Given a report that carries no findings list at all, when listing, then nothing is claimed resolved", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    // findings omitted entirely — inventory-only report, not a clean machine
+    await repository.recordReport(
+      report({ receivedAt: new Date("2026-08-22T18:00:00Z") })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "open");
+  });
+
+  it("Given two machines carry one finding, when listing, then it counts both", async () => {
+    await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.machineCount, 2);
+  });
+
+  it("Given one of two machines fixed it, when listing, then the finding stays open on the other", async () => {
+    await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({
+        machineId: "m-a",
+        findings: [],
+        receivedAt: new Date("2026-08-22T18:00:00Z"),
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "open");
+    assert.equal(found.machineCount, 1);
+  });
+
+  it("Given a finding is acknowledged, when listing, then it shows who took it and stays open", async () => {
+    const { hostId } = await repository.recordReport(
+      report({ findings: [finding()] })
+    );
+    await repository.acknowledgeFinding({
+      hostId,
+      fingerprint: "sha256:fingerprint-1",
+      acknowledgedBy: "Jonathan Santilli",
+      acknowledgedAt: new Date("2026-08-22T12:06:00Z"),
+    });
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "acknowledged");
+    assert.equal(found.acknowledgedBy, "Jonathan Santilli");
+  });
+
+  // Acknowledging is a person taking responsibility, not evidence of a fix.
+  it("Given an acknowledged finding is later absent, when listing, then it resolves anyway", async () => {
+    const { hostId } = await repository.recordReport(
+      report({ findings: [finding()] })
+    );
+    await repository.acknowledgeFinding({
+      hostId,
+      fingerprint: "sha256:fingerprint-1",
+      acknowledgedBy: "Jonathan Santilli",
+      acknowledgedAt: new Date("2026-08-22T12:06:00Z"),
+    });
+    await repository.recordReport(
+      report({ findings: [], receivedAt: new Date("2026-08-22T18:00:00Z") })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "resolved");
+  });
+
+  it("Given a suppressed finding, when listing, then it is excluded", async () => {
+    await repository.recordReport(
+      report({ findings: [finding({ suppressed: true })] })
+    );
+    assert.deepEqual(await repository.listFindings(), []);
+  });
+
+  it("Given findings of mixed severity, when listing, then critical comes first", async () => {
+    await repository.recordReport(
+      report({
+        findings: [
+          finding({ fingerprint: "fp-low", severity: "LOW", findingId: "f-2" }),
+          finding({
+            fingerprint: "fp-crit",
+            severity: "CRITICAL",
+            findingId: "f-3",
+          }),
+          finding({
+            fingerprint: "fp-med",
+            severity: "MEDIUM",
+            findingId: "f-4",
+          }),
+        ],
+      })
+    );
+
+    const severities = (await repository.listFindings()).map((f) => f.severity);
+    assert.deepEqual(severities, ["CRITICAL", "MEDIUM", "LOW"]);
+  });
+
+  it("Given a finding, when listing, then it carries the hash of the file it was found in", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.contentHash, `sha256:${"b".repeat(64)}`);
   });
 });

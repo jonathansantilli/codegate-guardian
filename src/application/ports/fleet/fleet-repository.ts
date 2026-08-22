@@ -4,6 +4,56 @@ import type {
   InventoryScope,
 } from "@/src/domain/fleet/entities/host";
 
+/**
+ * Where a finding sits in its life.
+ *
+ * Derived from report history, never stored: a finding is open while the
+ * machine's latest report still contains it, and resolved once a later report
+ * does not. The report is the evidence — nobody marks a finding done by hand.
+ */
+export const FINDING_STATUSES = [
+  "open",
+  "acknowledged",
+  "resolved",
+  "regressed",
+] as const;
+export type FindingStatus = (typeof FINDING_STATUSES)[number];
+
+export type FleetFinding = {
+  fingerprint: string;
+  ruleId: string;
+  severity: string;
+  description: string;
+  filePath: string | null;
+  contentHash: string | null;
+  status: FindingStatus;
+  machineCount: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  acknowledgedBy: string | null;
+  acknowledgedAt: Date | null;
+};
+
+export type RecordFindingInput = {
+  findingId: string;
+  ruleId: string;
+  fingerprint: string;
+  severity: string;
+  category: string | null;
+  layer: string | null;
+  filePath: string | null;
+  contentHash: string | null;
+  line: number | null;
+  column: number | null;
+  description: string;
+  evidence: string | null;
+  owasp: unknown;
+  cwe: string | null;
+  confidence: string | null;
+  fixable: boolean | null;
+  suppressed: boolean;
+};
+
 export type RecordHostReportInput = {
   machineId: string;
   hostname: string;
@@ -16,6 +66,11 @@ export type RecordHostReportInput = {
   kbVersion: string | null;
   toolsDetected: unknown;
   items: RecordInventoryItemInput[];
+  /**
+   * Undefined means the agent reported inventory only. That is not the same
+   * as an empty list, which asserts the machine is clean.
+   */
+  findings?: RecordFindingInput[];
 };
 
 export type RecordInventoryItemInput = {
@@ -89,4 +144,14 @@ export type FleetRepository = {
   findHostDetail(hostId: string): Promise<HostDetail | null>;
   /** Fleet-wide artifacts, grouped by content hash — never by name. */
   listArtifactGroups(): Promise<ArtifactGroup[]>;
+  /** Findings across the fleet, with status derived from report history. */
+  listFindings(): Promise<FleetFinding[]>;
+  /** Records that a person has taken responsibility for a finding. */
+  acknowledgeFinding(input: {
+    hostId: string;
+    fingerprint: string;
+    acknowledgedBy: string;
+    acknowledgedAt: Date;
+    note?: string;
+  }): Promise<void>;
 };
