@@ -838,8 +838,13 @@ button:not(.btn):not(.chip):not(.tog):not(.badge):not(.icon-btn):not(.input) {
 .gd textarea.ta::placeholder {
   color: var(--fg3);
 }
-.gd input.input:focus-visible,
 .gd textarea.ta:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+/* A search box is a label wrapping a bare input, so the ring belongs on the
+ * wrapper. Putting it on the input drew a second box inside the first. */
+.gd label.input:focus-within {
   outline: 2px solid var(--fg);
   outline-offset: 1px;
 }
