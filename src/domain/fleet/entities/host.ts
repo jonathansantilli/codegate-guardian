@@ -18,6 +18,12 @@ export type Host = {
   agentVersion: string | null;
   firstSeenAt: Date;
   lastSeenAt: Date;
+  /**
+   * When this machine's enrolment was withdrawn, if it was. A revoked machine
+   * keeps running and keeps reporting — the server simply stops accepting it.
+   */
+  revokedAt: Date | null;
+  revokedBy: string | null;
 };
 
 /**

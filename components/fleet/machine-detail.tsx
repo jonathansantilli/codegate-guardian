@@ -19,10 +19,9 @@ import {
   Card,
   CardHead,
   FRESHNESS_COLOR,
-  FRESHNESS_LABEL,
-  FRESHNESS_TONE,
   KV,
   Loading,
+  machineStatus,
   Sev,
   sevColor,
   Tabs,
@@ -49,6 +48,8 @@ export type HostDetail = {
     agentVersion: string | null;
     firstSeenAt: string;
     lastSeenAt: string;
+    revokedAt: string | null;
+    revokedBy: string | null;
   };
   lastCollectedAt: string | null;
   kbVersion: string | null;
@@ -96,7 +97,10 @@ export function useHostDetail(hostId: string) {
 
 export function MachineHeader({ detail }: { detail: HostDetail }) {
   const { host } = detail;
-  const freshness = getHostFreshness(new Date(host.lastSeenAt));
+  const status = machineStatus(
+    getHostFreshness(new Date(host.lastSeenAt)),
+    host.revokedAt
+  );
   const critical = detail.findings.filter(
     (f) => f.severity === "CRITICAL"
   ).length;
@@ -141,9 +145,7 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
               {host.owner ?? "Unassigned"}
               {host.team ? ` · ${host.team}` : ""}
             </span>
-            <Badge tone={FRESHNESS_TONE[freshness]}>
-              {FRESHNESS_LABEL[freshness]}
-            </Badge>
+            <Badge tone={status.tone}>{status.label}</Badge>
             {detail.findings.length > 0 && (
               <Badge tone="crit">
                 {detail.findings.length} open
@@ -194,6 +196,29 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
         />
         <KV k="Last report" v={formatRelativeTime(new Date(host.lastSeenAt))} />
       </div>
+      {host.revokedAt && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "10px",
+            padding: "11px 13px",
+            borderRadius: "9px",
+            background: "var(--muted)",
+            fontSize: "12.5px",
+            color: "var(--fg2)",
+            lineHeight: 1.5,
+          }}
+        >
+          <Ic name="shieldOff" size={15} />
+          <span>
+            Enrolment revoked{host.revokedBy ? ` by ${host.revokedBy}` : ""} on{" "}
+            {new Date(host.revokedAt).toLocaleDateString()}. This server refuses
+            its reports; the agent on the machine is untouched and still
+            running. What you see below is the last thing it sent.
+          </span>
+        </div>
+      )}
       {editingOwner && (
         <OwnerForm
           hostId={host.id}

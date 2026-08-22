@@ -3,7 +3,7 @@ import { getContainer } from "@/src/infrastructure";
 // Serves objects held by the filesystem object store.
 //
 // Objects are public, matching the previous hosted-blob behavior: the browser
-// renders them in the chat transcript and vision models fetch them by URL, so
+// serves them by URL, so
 // no session cookie is available at read time. Keys are uuid-prefixed and
 // unguessable, and the store rejects any key that could escape its root.
 //

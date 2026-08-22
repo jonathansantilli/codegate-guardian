@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { FleetShell } from "./fleet-shell";
 import { useHostDetail } from "./machine-detail";
+import { RevokeButton } from "./revoke-button";
 
 /**
  * The shell for anything scoped to one machine.
@@ -34,7 +35,22 @@ export function MachineShell({
     : [{ label: "Machines", href: "/fleet/machines" }];
 
   return (
-    <FleetShell actions={actions} crumbs={crumbs} title={leaf ?? hostname}>
+    <FleetShell
+      actions={
+        <>
+          {actions}
+          {data && (
+            <RevokeButton
+              hostId={hostId}
+              hostname={data.host.hostname}
+              revokedAt={data.host.revokedAt}
+            />
+          )}
+        </>
+      }
+      crumbs={crumbs}
+      title={leaf ?? hostname}
+    >
       {children}
     </FleetShell>
   );

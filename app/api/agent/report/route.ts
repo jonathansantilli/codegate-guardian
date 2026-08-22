@@ -68,6 +68,7 @@ function toFindingInput(finding: FindingPayload): RecordFindingInput {
  */
 export const REJECTION_NO_TOKEN = "401 no_token_configured";
 export const REJECTION_INVALID_TOKEN = "401 invalid_token";
+export const REJECTION_REVOKED = "403 enrolment_revoked";
 
 /** Longest hostname worth keeping from an unauthenticated caller. */
 const MAX_REJECTED_HOSTNAME = 64;
@@ -159,6 +160,25 @@ export async function POST(request: Request) {
 
   const payload = parsed.data;
   const receivedAt = new Date();
+
+  // A revoked machine keeps running and keeps reporting — the server cannot
+  // tell it to stop. Closing the door here is the whole of what revocation
+  // means, so the refusal is recorded like any other rejected check-in.
+  const known = await container.ports.fleet.findHostByMachineId(
+    payload.agent.machineId
+  );
+  if (known?.revokedAt) {
+    await container.ports.fleet.recordActivity({
+      occurredAt: receivedAt,
+      actorKind: "agent",
+      actorName: payload.host.hostname,
+      action: "Check-in rejected",
+      target: null,
+      result: REJECTION_REVOKED,
+      apiCall: "POST /api/agent/report",
+    });
+    return Response.json({ error: "Enrolment revoked" }, { status: 403 });
+  }
 
   try {
     const { hostId, reportId } = await container.ports.fleet.recordReport({

@@ -37,6 +37,27 @@ export const FRESHNESS_TONE: Record<HostFreshness, "ok" | "warn" | "sec"> = {
   offline: "sec",
 };
 
+/**
+ * How a machine reads once revocation is taken into account.
+ *
+ * Freshness answers "have we heard from it"; revocation answers "would we
+ * accept it". A revoked machine goes quiet for a reason, so showing it as
+ * merely stale would hide the decision someone made.
+ */
+export function machineStatus(
+  freshness: HostFreshness,
+  revokedAt: string | Date | null
+): { label: string; tone: "ok" | "warn" | "sec"; color: string } {
+  if (revokedAt) {
+    return { label: "Revoked", tone: "sec", color: "var(--fg3)" };
+  }
+  return {
+    label: FRESHNESS_LABEL[freshness],
+    tone: FRESHNESS_TONE[freshness],
+    color: FRESHNESS_COLOR[freshness],
+  };
+}
+
 export const FRESHNESS_COLOR: Record<HostFreshness, string> = {
   online: "var(--ok)",
   stale: "var(--warn)",

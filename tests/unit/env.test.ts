@@ -39,15 +39,11 @@ describe("loadEnv", () => {
     const env = loadEnv(
       processEnv({
         ...REQUIRED,
-        GOOGLE_GENERATIVE_AI_API_KEY: "",
-        GEMINI_API_KEY: "   ",
         REDIS_URL: "",
         S3_BUCKET: "",
       })
     );
 
-    assert.equal(env.GOOGLE_GENERATIVE_AI_API_KEY, undefined);
-    assert.equal(env.GEMINI_API_KEY, undefined);
     assert.equal(env.REDIS_URL, undefined);
     assert.equal(env.S3_BUCKET, undefined);
   });
@@ -72,12 +68,10 @@ describe("loadEnv", () => {
       processEnv({
         ...REQUIRED,
         APP_URL: "  https://guardian.example.com  ",
-        GEMINI_API_KEY: " key-123 ",
       })
     );
 
     assert.equal(env.APP_URL, "https://guardian.example.com");
-    assert.equal(env.GEMINI_API_KEY, "key-123");
   });
 
   test("parses boolean-ish flags", () => {

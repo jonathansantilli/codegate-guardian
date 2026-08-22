@@ -49,14 +49,8 @@ const envSchema = z.object({
   NEXT_PUBLIC_BASE_PATH: z.string().default(""),
 
   // Feature flags
-  HACKATHON_MODE: booleanFromString.default(false),
-  ENABLE_LOCAL_CLI_MODELS: booleanFromString.default(false),
-  LOCAL_CLI_MODELS: optionalNonEmpty,
-  LOCAL_CLI_MODELS_CONFIG: optionalNonEmpty,
 
   // Direct provider keys
-  GOOGLE_GENERATIVE_AI_API_KEY: optionalNonEmpty,
-  GEMINI_API_KEY: optionalNonEmpty,
 
   // Fleet ingest: shared bearer token every agent presents when reporting.
   // Absent means the ingest endpoint is closed, so an instance that has not
@@ -67,7 +61,6 @@ const envSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalNonEmpty,
 
   // Scanner CLI
-  CODEX_BIN: optionalNonEmpty,
   CODEGATE_HOME: optionalNonEmpty,
 
   // Adapter selection (defaults chosen in each port's implementation
@@ -75,10 +68,6 @@ const envSchema = z.object({
   // Filesystem is the default so a bare `next start` needs no extra services;
   // the compose stack opts into MinIO by setting this to "s3".
   OBJECT_STORE_DRIVER: z.enum(["s3", "filesystem"]).default("filesystem"),
-  BOT_DETECTION_DRIVER: z.enum(["noop"]).default("noop"),
-  RATE_LIMITER_DRIVER: z.enum(["redis", "in-memory"]).default("redis"),
-  TELEMETRY_DRIVER: z.enum(["otlp", "noop"]).default("noop"),
-  LOGGER_DRIVER: z.enum(["console", "otel"]).default("console"),
 
   // Filesystem object store
   OBJECT_STORE_PATH: stringWithDefault("./data/uploads"),
