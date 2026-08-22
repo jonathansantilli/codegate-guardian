@@ -336,6 +336,22 @@ export type FleetRepository = {
   recordReport(input: RecordHostReportInput): Promise<RecordedReport>;
   listHostSummaries(): Promise<HostSummary[]>;
   findHostDetail(hostId: string): Promise<HostDetail | null>;
+  /**
+   * Withdraws a machine's enrolment.
+   *
+   * The server stops accepting its reports. Nothing is sent to the machine —
+   * it keeps running and keeps trying, and the console keeps the last thing
+   * it reported so an operator can still see what was on it.
+   */
+  revokeHost(input: {
+    hostId: string;
+    revokedAt: Date;
+    revokedBy: string;
+  }): Promise<void>;
+  /** Reverses a revocation, so the machine's reports are accepted again. */
+  restoreHost(input: { hostId: string }): Promise<void>;
+  /** The machine behind an agent's id, for deciding whether to accept a report. */
+  findHostByMachineId(machineId: string): Promise<Host | null>;
   /** Machines and people needing attention, worst first. */
   listAttention(limit?: number): Promise<AttentionRow[]>;
   /** The overview's headline numbers in one round trip. */

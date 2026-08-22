@@ -61,15 +61,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 # Bind to every interface so the port is reachable from outside the container.
 ENV HOSTNAME=0.0.0.0
-# The scanner caches rules under $CODEGATE_HOME; keep it on a writable path.
-ENV CODEGATE_HOME=/tmp/.codegate
 ENV OBJECT_STORE_PATH=/app/data/uploads
-
-# The scanner is spawned as `npx codegate-ai`, which never appears in an
-# import graph and so is not traced into the standalone bundle. Installing it
-# globally puts the binary on PATH, where npx finds it without touching the
-# network at runtime. Keep this version in step with package.json.
-RUN npm install -g codegate-ai@0.7.0 && npm cache clean --force
 
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs

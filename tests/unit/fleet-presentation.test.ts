@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
+import { machineStatus } from "@/components/fleet/ui";
 import {
   displayPath,
   formatRelativeTime,
@@ -93,5 +94,23 @@ describe("displayPath", () => {
       displayPath("/Users/a.b/.claude/x.json", { username: "a.b" }),
       "~/.claude/x.json"
     );
+  });
+});
+
+describe("machineStatus", () => {
+  test("a revoked machine reads as revoked, not as merely stale", () => {
+    const status = machineStatus("stale", new Date("2026-08-01T00:00:00Z"));
+    assert.equal(status.label, "Revoked");
+  });
+
+  test("revocation outranks even a machine still reporting", () => {
+    // The last report can be minutes old and the door still closed.
+    assert.equal(machineStatus("online", new Date()).label, "Revoked");
+  });
+
+  test("an unrevoked machine reads by how recently it reported", () => {
+    assert.equal(machineStatus("online", null).label, "Reporting");
+    assert.equal(machineStatus("stale", null).label, "Stale");
+    assert.equal(machineStatus("offline", null).label, "No recent reports");
   });
 });

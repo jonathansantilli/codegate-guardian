@@ -376,6 +376,37 @@ export class DrizzleFleetRepository implements FleetRepository {
     });
   }
 
+  async revokeHost({
+    hostId,
+    revokedAt,
+    revokedBy,
+  }: {
+    hostId: string;
+    revokedAt: Date;
+    revokedBy: string;
+  }): Promise<void> {
+    await this.db
+      .update(host)
+      .set({ revokedAt, revokedBy })
+      .where(eq(host.id, hostId));
+  }
+
+  async restoreHost({ hostId }: { hostId: string }): Promise<void> {
+    await this.db
+      .update(host)
+      .set({ revokedAt: null, revokedBy: null })
+      .where(eq(host.id, hostId));
+  }
+
+  async findHostByMachineId(machineId: string) {
+    const [row] = await this.db
+      .select()
+      .from(host)
+      .where(eq(host.machineId, machineId))
+      .limit(1);
+    return row ?? null;
+  }
+
   async findHostDetail(hostId: string): Promise<HostDetail | null> {
     const [hostRow] = await this.db
       .select()

@@ -57,6 +57,20 @@
       "when": 1787417258729,
       "tag": "0007_graceful_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787426484968,
+      "tag": "0008_steady_groot",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787427420848,
+      "tag": "0009_real_mephisto",
+      "breakpoints": true
     }
   ]
 }

@@ -19,9 +19,8 @@ import {
   Card,
   Code,
   Empty,
-  FRESHNESS_LABEL,
-  FRESHNESS_TONE,
   Loading,
+  machineStatus,
   Sev,
 } from "./ui";
 
@@ -42,6 +41,7 @@ type HostSummary = {
     team: string | null;
     agentVersion: string | null;
     lastSeenAt: string;
+    revokedAt: string | null;
   };
   itemsTotal: number;
   toolNames: string[];
@@ -49,14 +49,25 @@ type HostSummary = {
 
 type Attention = { hostId: string; severity: string };
 
-type Filter = "all" | HostFreshness;
+type Filter = "all" | HostFreshness | "revoked";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "online", label: "Reporting" },
   { key: "stale", label: "Stale" },
   { key: "offline", label: "No recent reports" },
+  { key: "revoked", label: "Revoked" },
 ];
+
+/** Rows per page. Enough to work through, few enough to scan. */
+const PAGE_SIZE = 25;
+
+/** Which filter a machine belongs to. Revocation wins over silence. */
+function bucketOf(entry: HostSummary): Exclude<Filter, "all"> {
+  return entry.host.revokedAt
+    ? "revoked"
+    : getHostFreshness(new Date(entry.host.lastSeenAt));
+}
 
 export function MachinesScreen() {
   const router = useRouter();
@@ -71,6 +82,7 @@ export function MachinesScreen() {
   );
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
 
   if (isLoading) {
     return <Loading label="Loading machines…" />;
@@ -117,15 +129,12 @@ export function MachinesScreen() {
     count:
       f.key === "all"
         ? hosts.length
-        : hosts.filter(
-            (h) => getHostFreshness(new Date(h.host.lastSeenAt)) === f.key
-          ).length,
+        : hosts.filter((h) => bucketOf(h) === f.key).length,
   }));
 
   const needle = query.trim().toLowerCase();
-  const visible = hosts.filter((entry) => {
-    const freshness = getHostFreshness(new Date(entry.host.lastSeenAt));
-    if (filter !== "all" && freshness !== filter) {
+  const matching = hosts.filter((entry) => {
+    if (filter !== "all" && bucketOf(entry) !== filter) {
       return false;
     }
     if (!needle) {
@@ -135,6 +144,13 @@ export function MachinesScreen() {
       .toLowerCase()
       .includes(needle);
   });
+
+  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const visible = matching.slice(
+    current * PAGE_SIZE,
+    (current + 1) * PAGE_SIZE
+  );
 
   return (
     <>
@@ -150,7 +166,10 @@ export function MachinesScreen() {
           <Ic name="search" size={14} />
           <input
             className="input"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
             placeholder="Filter by hostname or owner"
             style={{
               border: 0,
@@ -165,7 +184,10 @@ export function MachinesScreen() {
           <button
             className={`chip${filter === f.key ? " on" : ""}`}
             key={f.key}
-            onClick={() => setFilter(f.key)}
+            onClick={() => {
+              setFilter(f.key);
+              setPage(0);
+            }}
             type="button"
           >
             {f.label}{" "}
@@ -195,8 +217,9 @@ export function MachinesScreen() {
             </thead>
             <tbody>
               {visible.map((entry) => {
-                const freshness = getHostFreshness(
-                  new Date(entry.host.lastSeenAt)
+                const status = machineStatus(
+                  getHostFreshness(new Date(entry.host.lastSeenAt)),
+                  entry.host.revokedAt
                 );
                 const severities = bySeverity.get(entry.host.id) ?? [];
                 const worst = [...severities].sort(
@@ -249,9 +272,7 @@ export function MachinesScreen() {
                       </div>
                     </td>
                     <td>
-                      <Badge tone={FRESHNESS_TONE[freshness]}>
-                        {FRESHNESS_LABEL[freshness]}
-                      </Badge>
+                      <Badge tone={status.tone}>{status.label}</Badge>
                     </td>
                     <td
                       className="mono"
@@ -308,8 +329,37 @@ export function MachinesScreen() {
           }}
         >
           <span style={{ fontSize: "12.5px", color: "var(--fg3)" }}>
-            Showing {visible.length} of {hosts.length}
+            Showing {matching.length === 0 ? 0 : current * PAGE_SIZE + 1}–
+            {current * PAGE_SIZE + visible.length} of {matching.length}
+            {matching.length === hosts.length
+              ? ""
+              : ` (${hosts.length} enrolled)`}
           </span>
+          <div
+            style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <button
+              className="btn xs btn-outline"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+              type="button"
+            >
+              Previous
+            </button>
+            <button
+              className="btn xs btn-outline"
+              disabled={current >= pages - 1}
+              onClick={() => setPage(current + 1)}
+              type="button"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </Card>
     </>
