@@ -9,6 +9,9 @@ export type Host = {
   id: string;
   machineId: string;
   hostname: string;
+  /** The person accountable for this machine. Display data, set by an operator. */
+  owner: string | null;
+  team: string | null;
   platform: string | null;
   osRelease: string | null;
   username: string | null;
@@ -46,6 +49,8 @@ export type HostInventoryItem = {
   pattern: string | null;
   path: string;
   exists: boolean;
+  /** Content hash — the artifact's identity. Null when absent or unhashed. */
+  contentHash: string | null;
   riskSurface: unknown;
   resolvedAgainst: string | null;
 };

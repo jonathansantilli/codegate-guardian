@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type {
+  ArtifactGroup,
   FleetRepository,
   HostDetail,
   HostSummary,
@@ -80,6 +81,7 @@ export class DrizzleFleetRepository implements FleetRepository {
             pattern: item.pattern,
             path: item.path,
             exists: item.exists,
+            contentHash: item.contentHash,
             riskSurface: item.riskSurface ?? [],
             resolvedAgainst: item.resolvedAgainst,
           }))
@@ -223,8 +225,85 @@ export class DrizzleFleetRepository implements FleetRepository {
         scope: item.scope as InventoryScope,
         path: item.path,
         exists: item.exists,
+        contentHash: item.contentHash,
         riskSurface: toStringArray(item.riskSurface),
       })),
     };
+  }
+  /**
+   * Fleet-wide artifacts keyed by content hash.
+   *
+   * Two files sharing a name but differing by one byte are two variants, and
+   * only the latest report from each machine counts — an artifact removed
+   * yesterday must not still appear today. Items with no hash (absent files,
+   * or an agent predating hashing) are excluded: they cannot be identified.
+   */
+  async listArtifactGroups(): Promise<ArtifactGroup[]> {
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], {
+        id: hostReport.id,
+      })
+      .from(hostReport)
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
+    const rows = await this.db
+      .select({
+        tool: hostInventoryItem.tool,
+        kind: hostInventoryItem.kind,
+        path: hostInventoryItem.path,
+        contentHash: hostInventoryItem.contentHash,
+        machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
+        firstSeenAt: sql<Date>`min(${hostReport.collectedAt})`,
+      })
+      .from(hostInventoryItem)
+      .innerJoin(latest, eq(hostInventoryItem.reportId, latest.id))
+      .innerJoin(hostReport, eq(hostInventoryItem.reportId, hostReport.id))
+      .where(
+        and(
+          eq(hostInventoryItem.exists, true),
+          isNotNull(hostInventoryItem.contentHash)
+        )
+      )
+      .groupBy(
+        hostInventoryItem.tool,
+        hostInventoryItem.kind,
+        hostInventoryItem.path,
+        hostInventoryItem.contentHash
+      );
+
+    // Group by the artifact's display name, but keep each hash separate
+    // inside it — the name is a label, the hash is the identity.
+    const groups = new Map<string, ArtifactGroup>();
+
+    for (const row of rows) {
+      const name = row.path.split("/").pop() || row.path;
+      const key = `${row.tool}::${row.kind}::${name}`;
+      const group = groups.get(key) ?? {
+        name,
+        tool: row.tool,
+        kind: row.kind as InventoryItemKind,
+        variants: [],
+        machineCount: 0,
+      };
+
+      group.variants.push({
+        contentHash: row.contentHash as string,
+        machineCount: row.machineCount,
+        firstSeenAt: new Date(row.firstSeenAt),
+        paths: [row.path],
+      });
+      group.machineCount += row.machineCount;
+      groups.set(key, group);
+    }
+
+    return [...groups.values()]
+      .map((group) => ({
+        ...group,
+        variants: group.variants.sort(
+          (a, b) => b.machineCount - a.machineCount
+        ),
+      }))
+      .sort((a, b) => b.machineCount - a.machineCount);
   }
 }

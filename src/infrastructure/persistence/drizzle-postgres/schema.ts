@@ -224,6 +224,8 @@ export const host = pgTable(
     platform: text("platform"),
     osRelease: text("osRelease"),
     username: text("username"),
+    owner: text("owner"),
+    team: text("team"),
     agentVersion: text("agentVersion"),
     firstSeenAt: timestamp("firstSeenAt").notNull(),
     lastSeenAt: timestamp("lastSeenAt").notNull(),
@@ -278,6 +280,7 @@ export const hostInventoryItem = pgTable(
     pattern: text("pattern"),
     path: text("path").notNull(),
     exists: boolean("exists").notNull(),
+    contentHash: text("contentHash"),
     riskSurface: json("riskSurface").notNull(),
     resolvedAgainst: text("resolvedAgainst"),
   },
@@ -285,6 +288,9 @@ export const hostInventoryItem = pgTable(
     reportIdx: index("HostInventoryItem_v1_report_idx").on(table.reportId),
     hostIdx: index("HostInventoryItem_v1_host_idx").on(table.hostId),
     toolIdx: index("HostInventoryItem_v1_tool_idx").on(table.tool),
+    contentHashIdx: index("HostInventoryItem_v1_content_hash_idx").on(
+      table.contentHash
+    ),
   })
 );
 

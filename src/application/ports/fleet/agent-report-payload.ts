@@ -20,6 +20,8 @@ const MAX_TOOLS = 500;
 const MAX_RISK_SURFACES = 64;
 const MAX_STRING = 4096;
 const MAX_PATH = 4096;
+// "sha256:" + 64 hex, matching the content feed's indicator format.
+const CONTENT_HASH = /^sha256:[0-9a-f]{64}$/;
 
 const boundedString = z.string().max(MAX_STRING);
 
@@ -31,6 +33,9 @@ export const inventoryItemSchema = z.object({
   pattern: boundedString.optional(),
   path: z.string().min(1).max(MAX_PATH),
   exists: z.boolean(),
+  // Identity. Absent when the file does not exist, or when an older agent
+  // predates hashing — the server keeps such rows but cannot group them.
+  sha256: z.string().regex(CONTENT_HASH).optional(),
   risk_surface: z.array(boundedString).max(MAX_RISK_SURFACES).default([]),
   fields_of_interest: z.record(boundedString, boundedString).optional(),
   resolved_against: boundedString.optional(),

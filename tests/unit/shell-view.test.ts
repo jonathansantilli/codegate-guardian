@@ -15,6 +15,19 @@ describe("shell view routing", () => {
     assert.equal(getShellViewFromPathname("/chat/abc123"), "chat");
   });
 
+  test("uses fleet view for the fleet path", () => {
+    assert.equal(getShellViewFromPathname("/fleet"), "fleet");
+  });
+
+  test("uses fleet view for a specific machine", () => {
+    assert.equal(getShellViewFromPathname("/fleet/host-123"), "fleet");
+  });
+
+  // Guards against a prefix match swallowing an unrelated future route.
+  test("does not treat a path merely starting with fleet as the fleet view", () => {
+    assert.equal(getShellViewFromPathname("/fleetwood"), "report");
+  });
+
   test("falls back to report view for unknown path", () => {
     assert.equal(getShellViewFromPathname("/unknown"), "report");
   });
