@@ -19,11 +19,18 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  isOutstanding,
+  STATUS_LABEL,
+  severityRank,
+  statusExplanation,
+} from "@/lib/security/finding-presentation";
+import {
   formatRelativeTime,
   getHostFreshness,
   type HostFreshness,
 } from "@/lib/security/fleet-presentation";
 import { cn, fetcher } from "@/lib/utils";
+import type { FindingStatus } from "@/src/application/ports/fleet/fleet-repository";
 
 type HostSummary = {
   host: {
@@ -42,6 +49,27 @@ type HostSummary = {
   skillsTotal: number;
   configsTotal: number;
   toolNames: string[];
+};
+
+type FleetFinding = {
+  fingerprint: string;
+  ruleId: string;
+  severity: string;
+  description: string;
+  filePath: string | null;
+  contentHash: string | null;
+  status: FindingStatus;
+  machineCount: number;
+  lastSeenAt: string;
+  acknowledgedBy: string | null;
+};
+
+const severityColor: Record<string, string> = {
+  CRITICAL: "text-red-700 dark:text-red-400",
+  HIGH: "text-orange-700 dark:text-orange-400",
+  MEDIUM: "text-amber-700 dark:text-amber-400",
+  LOW: "text-sky-700 dark:text-sky-400",
+  INFO: "text-muted-foreground",
 };
 
 type HostDetail = {
@@ -104,6 +132,12 @@ export function FleetDashboard() {
     { refreshInterval: 30_000 }
   );
 
+  const { data: findingData } = useSWR<{ findings: FleetFinding[] }>(
+    `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet/findings`,
+    fetcher,
+    { refreshInterval: 30_000 }
+  );
+
   const { data: detail } = useSWR<HostDetail>(
     selectedHostId
       ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet/host?hostId=${selectedHostId}`
@@ -112,6 +146,10 @@ export function FleetDashboard() {
   );
 
   const hosts = data?.hosts ?? [];
+  const findings = [...(findingData?.findings ?? [])].sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity)
+  );
+  const outstanding = findings.filter((f) => isOutstanding(f.status));
   const totals = hosts.reduce(
     (acc, entry) => ({
       skills: acc.skills + entry.skillsTotal,
@@ -145,10 +183,60 @@ export function FleetDashboard() {
         />
         <StatTile
           icon={ShieldAlertIcon}
-          label="Not reporting"
-          value={totals.stale}
+          label="Open findings"
+          value={outstanding.length}
         />
       </div>
+
+      {outstanding.length > 0 && (
+        <div className="mb-8 overflow-hidden rounded-xl border border-border/50">
+          <div className="flex items-center gap-2.5 border-border/50 border-b bg-muted/30 px-4 py-2.5">
+            <h2 className="font-medium text-sm">Act on these first</h2>
+            <span className="text-muted-foreground text-xs">
+              A finding closes when a later report no longer contains it
+            </span>
+          </div>
+          <ul className="divide-y divide-border/40">
+            {outstanding.map((finding) => (
+              <li
+                className="flex items-start gap-3 px-4 py-3"
+                key={finding.fingerprint}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 font-medium text-xs tabular-nums",
+                    severityColor[finding.severity] ?? "text-muted-foreground"
+                  )}
+                >
+                  {finding.severity}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm">{finding.description}</p>
+                  <p className="truncate font-mono text-muted-foreground text-xs">
+                    {finding.ruleId}
+                    {finding.filePath ? ` · ${finding.filePath}` : ""}
+                  </p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {statusExplanation(
+                      finding.status,
+                      new Date(finding.lastSeenAt)
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <Badge className="font-normal text-xs" variant="secondary">
+                    {STATUS_LABEL[finding.status]}
+                  </Badge>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {finding.machineCount} machine
+                    {finding.machineCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {isLoading && (
         <p className="text-muted-foreground text-sm">Loading machines…</p>
