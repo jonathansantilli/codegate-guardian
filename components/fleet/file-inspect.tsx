@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { shortHash } from "@/lib/security/artifact-presentation";
 import { severityRank } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   displayPath,
   formatRelativeTime,
@@ -24,8 +25,6 @@ import { Badge, Card, CardHead, KV, Loading, sevColor } from "./ui";
  * lines were reported and stops there rather than implying it holds a copy.
  */
 
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-
 type ArtifactGroup = {
   name: string;
   tool: string;
@@ -40,7 +39,7 @@ export function FileInspectScreen({ hostId }: { hostId: string }) {
   const path = params.get("path");
   const { data: detail, isLoading } = useHostDetail(hostId);
   const { data: artifactData } = useSWR<{ artifacts: ArtifactGroup[] }>(
-    `${base}/api/fleet/artifacts`,
+    `${API_BASE}/artifacts`,
     fetcher
   );
 

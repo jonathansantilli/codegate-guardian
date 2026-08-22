@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import useSWR from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
 
@@ -15,8 +16,6 @@ import { Ic } from "./icons";
  * 482 machines on an empty install is the first thing that makes a console
  * feel untrue, so a count that is zero is not rendered at all.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type CountKey = "machines" | "artifacts" | "findings" | "policies";
 
@@ -60,20 +59,17 @@ const NAV: {
 type Counts = Record<CountKey, number>;
 
 export function useFleetCounts(): Counts {
-  const { data: hosts } = useSWR<{ hosts: unknown[] }>(
-    `${base}/api/fleet`,
-    fetcher
-  );
+  const { data: hosts } = useSWR<{ hosts: unknown[] }>(`${API_BASE}`, fetcher);
   const { data: findings } = useSWR<{ findings: { status: string }[] }>(
-    `${base}/api/fleet/findings`,
+    `${API_BASE}/findings`,
     fetcher
   );
   const { data: artifacts } = useSWR<{ artifacts: unknown[] }>(
-    `${base}/api/fleet/artifacts`,
+    `${API_BASE}/artifacts`,
     fetcher
   );
   const { data: policies } = useSWR<{ policies: unknown[] }>(
-    `${base}/api/fleet/policies`,
+    `${API_BASE}/policies`,
     fetcher
   );
 

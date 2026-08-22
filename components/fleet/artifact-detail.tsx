@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import useSWR from "swr";
 import { hashSlug, shortHash } from "@/lib/security/artifact-presentation";
 import { severityRank } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   displayPath,
   formatRelativeTime,
 } from "@/lib/security/fleet-presentation";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
+import { SuppressDialog, type SuppressTarget } from "./suppress-dialog";
 import { Avatar, Badge, Card, CardHead, KV, Loading, Sev } from "./ui";
 
 /**
@@ -19,8 +22,6 @@ import { Avatar, Badge, Card, CardHead, KV, Loading, Sev } from "./ui";
  * actually compare — identity, spread, age and verdict — and says so, rather
  * than showing a line-by-line diff it has no bytes to produce.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Variant = {
   contentHash: string;
@@ -53,13 +54,14 @@ type Finding = {
 
 export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
   const { data, isLoading, error } = useSWR<Variant>(
-    `${base}/api/fleet/artifact?contentHash=${encodeURIComponent(contentHash)}`,
+    `${API_BASE}/artifact?contentHash=${encodeURIComponent(contentHash)}`,
     fetcher
   );
   const { data: findingData } = useSWR<{ findings: Finding[] }>(
-    `${base}/api/fleet/findings`,
+    `${API_BASE}/findings`,
     fetcher
   );
+  const [suppressing, setSuppressing] = useState<SuppressTarget | null>(null);
 
   if (isLoading) {
     return <Loading label="Loading the artifact…" />;
@@ -138,6 +140,21 @@ export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
                 <Badge tone="crit">{verdict.ruleId}</Badge>
               ) : (
                 <Badge tone="ok">No finding on this variant</Badge>
+              )}
+              {verdict && (
+                <button
+                  className="btn xs btn-outline"
+                  onClick={() =>
+                    setSuppressing({
+                      ruleId: verdict.ruleId,
+                      label: `${verdict.ruleId} on ${data.name}`,
+                      blastRadius: data.machines.length,
+                    })
+                  }
+                  type="button"
+                >
+                  Suppress this variant fleet-wide
+                </button>
               )}
             </div>
             <span
@@ -368,6 +385,13 @@ export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
           </div>
         </Card>
       </div>
+
+      {suppressing && (
+        <SuppressDialog
+          onClose={() => setSuppressing(null)}
+          target={suppressing}
+        />
+      )}
     </>
   );
 }

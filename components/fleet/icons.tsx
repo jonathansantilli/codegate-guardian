@@ -145,8 +145,6 @@ export const ICONS: Record<string, ReactNode> = {
   ),
 };
 
-export type IconName = keyof typeof ICONS;
-
 export function Ic({
   name,
   size = 16,

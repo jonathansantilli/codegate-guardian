@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   displayPath,
   formatRelativeTime,
@@ -31,8 +32,6 @@ import {
  * install with no machines is being set up, an install whose check-ins are
  * being rejected is broken, and anything else is working.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Overview = {
   hostsEnrolled: number;
@@ -72,17 +71,17 @@ const FEED_STALE_DAYS = 7;
 
 export function OverviewScreen() {
   const { data: overview, isLoading } = useSWR<Overview>(
-    `${base}/api/fleet/overview`,
+    `${API_BASE}/overview`,
     fetcher,
     { refreshInterval: 30_000 }
   );
   const { data: attention } = useSWR<{ attention: Attention[] }>(
-    `${base}/api/fleet/attention`,
+    `${API_BASE}/attention`,
     fetcher,
     { refreshInterval: 30_000 }
   );
   const { data: policyData } = useSWR<{ policies: Policy[] }>(
-    `${base}/api/fleet/policies`,
+    `${API_BASE}/policies`,
     fetcher
   );
 

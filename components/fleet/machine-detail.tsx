@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import useSWR from "swr";
 import { severityRank } from "@/lib/security/finding-presentation";
+import { API_BASE } from "@/lib/security/fleet-api";
 import {
   displayPath,
   formatRelativeTime,
@@ -11,7 +13,20 @@ import {
 import { fetcher } from "@/lib/utils";
 import { EvidenceView } from "./evidence-view";
 import { Ic } from "./icons";
-import { Badge, Card, CardHead, KV, Loading, Sev, sevColor, Tabs } from "./ui";
+import { OwnerForm } from "./owner-form";
+import {
+  Badge,
+  Card,
+  CardHead,
+  FRESHNESS_COLOR,
+  FRESHNESS_LABEL,
+  FRESHNESS_TONE,
+  KV,
+  Loading,
+  Sev,
+  sevColor,
+  Tabs,
+} from "./ui";
 
 /**
  * One machine, in three views: what it carries, what was found on it, and
@@ -20,8 +35,6 @@ import { Badge, Card, CardHead, KV, Loading, Sev, sevColor, Tabs } from "./ui";
  * The header is shared by all three, because the question every tab answers
  * starts with the same two facts — which machine, and whose.
  */
-
-const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export type HostDetail = {
   host: {
@@ -76,13 +89,9 @@ export type HostDetail = {
 const REPORT_INTERVAL_HOURS = 6;
 
 export function useHostDetail(hostId: string) {
-  return useSWR<HostDetail>(
-    `${base}/api/fleet/host?hostId=${hostId}`,
-    fetcher,
-    {
-      refreshInterval: 30_000,
-    }
-  );
+  return useSWR<HostDetail>(`${API_BASE}/host?hostId=${hostId}`, fetcher, {
+    refreshInterval: 30_000,
+  });
 }
 
 export function MachineHeader({ detail }: { detail: HostDetail }) {
@@ -91,6 +100,7 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
   const critical = detail.findings.filter(
     (f) => f.severity === "CRITICAL"
   ).length;
+  const [editingOwner, setEditingOwner] = useState(false);
 
   return (
     <Card style={{ padding: "16px 18px", gap: "16px" }}>
@@ -131,20 +141,8 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
               {host.owner ?? "Unassigned"}
               {host.team ? ` · ${host.team}` : ""}
             </span>
-            <Badge
-              tone={
-                freshness === "online"
-                  ? "ok"
-                  : freshness === "stale"
-                    ? "warn"
-                    : "sec"
-              }
-            >
-              {freshness === "online"
-                ? "Reporting"
-                : freshness === "stale"
-                  ? "Stale"
-                  : "No recent reports"}
+            <Badge tone={FRESHNESS_TONE[freshness]}>
+              {FRESHNESS_LABEL[freshness]}
             </Badge>
             {detail.findings.length > 0 && (
               <Badge tone="crit">
@@ -169,7 +167,18 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
         }}
       >
         <KV k="Team" v={host.team ?? "—"} />
-        <KV k="Owner" v={host.owner ?? "Unassigned"} />
+        <KV
+          k="Owner"
+          v={
+            <button
+              onClick={() => setEditingOwner(true)}
+              style={{ textAlign: "left", textDecoration: "underline dotted" }}
+              type="button"
+            >
+              {host.owner ?? "Assign an owner"}
+            </button>
+          }
+        />
         <KV
           k="Platform"
           v={[host.platform, host.osRelease].filter(Boolean).join(" ") || "—"}
@@ -185,6 +194,14 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
         />
         <KV k="Last report" v={formatRelativeTime(new Date(host.lastSeenAt))} />
       </div>
+      {editingOwner && (
+        <OwnerForm
+          hostId={host.id}
+          onDone={() => setEditingOwner(false)}
+          owner={host.owner}
+          team={host.team}
+        />
+      )}
     </Card>
   );
 }
@@ -387,10 +404,9 @@ export function MachineInventory({ hostId }: { hostId: string }) {
                   className="dot"
                   style={{
                     background:
-                      getHostFreshness(new Date(detail.host.lastSeenAt)) ===
-                      "online"
-                        ? "var(--ok)"
-                        : "var(--warn)",
+                      FRESHNESS_COLOR[
+                        getHostFreshness(new Date(detail.host.lastSeenAt))
+                      ],
                   }}
                 />
                 <span style={{ fontSize: "13px" }}>Last report</span>
