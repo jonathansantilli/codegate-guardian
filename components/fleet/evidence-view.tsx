@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 /**
  * The evidence behind a finding: the lines that caused it, in place.
@@ -68,7 +66,7 @@ export function EvidenceView({
 
   if (!evidence) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p style={{ fontSize: "12.5px", color: "var(--fg3)" }}>
         The agent reported no excerpt for this finding.
       </p>
     );
@@ -79,49 +77,61 @@ export function EvidenceView({
   const lines = evidence.split("\n");
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
         {filePath && (
-          <span className="break-all font-mono text-muted-foreground text-xs">
+          <span
+            className="mono trunc"
+            style={{
+              fontSize: "11.5px",
+              color: "var(--fg3)",
+              maxWidth: "100%",
+            }}
+          >
             {filePath}
           </span>
         )}
         {line !== null && (
-          <Badge className="font-mono font-normal text-xs" variant="secondary">
+          <span className="badge b-sec mono" style={{ fontSize: "11px" }}>
             line {line}
             {column === null ? "" : `, col ${column}`}
-          </Badge>
+          </span>
         )}
         {hiddenCount > 0 && (
           <button
-            className={cn(
-              "flex h-6 items-center gap-1.5 rounded-md border px-2 font-medium text-xs",
-              reveal
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground"
-            )}
+            className={`tog${reveal ? " on" : ""}`}
             onClick={() => setReveal(!reveal)}
             type="button"
           >
             Show hidden characters
-            <span className="tabular-nums">({hiddenCount})</span>
+            <span className="num">({hiddenCount})</span>
+            <span className="sw">
+              <i />
+            </span>
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-muted/40">
+      <div className="cv" style={{ overflowX: "auto" }}>
         {lines.map((text, index) => (
           <div
-            className="px-3 py-0.5 font-mono text-xs"
+            className="cvl"
             // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the excerpt IS its identity; two identical lines are different lines.
             key={`line-${index}`}
           >
-            <span className="whitespace-pre-wrap break-all">
+            <span className="cvc">
               {reveal
                 ? revealHidden(text).map((part, i) =>
                     part.hidden ? (
                       <span
-                        className="mx-0.5 rounded bg-amber-500/20 px-1 py-px align-baseline text-[10px] text-amber-700 dark:text-amber-400"
+                        className="zwc"
                         // biome-ignore lint/suspicious/noArrayIndexKey: run order within a line is the only thing distinguishing repeated characters.
                         key={`hidden-${i}`}
                       >
@@ -139,7 +149,11 @@ export function EvidenceView({
       </div>
 
       {contentHash && (
-        <span className="break-all font-mono text-muted-foreground text-xs">
+        <span
+          className="mono trunc"
+          style={{ fontSize: "11px", color: "var(--fg3)" }}
+          title={contentHash}
+        >
           {contentHash}
         </span>
       )}

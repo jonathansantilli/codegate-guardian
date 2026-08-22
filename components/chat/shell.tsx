@@ -11,7 +11,6 @@ import {
 import { getShellViewFromPathname } from "@/lib/security/shell-view";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { FleetDashboard } from "../fleet/fleet-dashboard";
 import { ReportDashboard } from "../report/report-dashboard";
 import { Artifact } from "./artifact";
 import { ChatHeader } from "./chat-header";
@@ -23,10 +22,8 @@ import { MultimodalInput } from "./multimodal-input";
 export function ChatShell() {
   const pathname = usePathname();
   const shellView = getShellViewFromPathname(pathname);
-  const isReportView = shellView === "report";
-  const isFleetView = shellView === "fleet";
   // Chat state and the data stream are only mounted for the chat view.
-  const isDashboardView = isReportView || isFleetView;
+  const isDashboardView = shellView === "report";
 
   const {
     chatId,
@@ -74,7 +71,7 @@ export function ChatShell() {
         {isDashboardView ? (
           <div className="flex min-w-0 flex-1 flex-col bg-sidebar">
             <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-background md:rounded-tl-[12px] md:border-t md:border-l md:border-border/40">
-              {isFleetView ? <FleetDashboard /> : <ReportDashboard />}
+              <ReportDashboard />
             </div>
           </div>
         ) : (
