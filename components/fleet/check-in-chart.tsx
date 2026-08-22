@@ -22,7 +22,8 @@ export type CheckInPoint = { hour: string; count: number };
  */
 export function toPath(
   points: CheckInPoint[],
-  hours = 24
+  hours = 24,
+  now: Date = new Date()
 ): { line: string; area: string; peak: { x: number; y: number } | null } {
   if (points.length === 0) {
     return { line: "", area: "", peak: null };
@@ -31,7 +32,11 @@ export function toPath(
   const byHour = new Map(
     points.map((p) => [new Date(p.hour).toISOString().slice(0, 13), p.count])
   );
-  const newest = new Date(points.at(-1)?.hour ?? Date.now());
+  // The right edge is now, not the last hour that happened to have data.
+  // Anchoring to the newest bucket drew a fleet that went silent six hours
+  // ago as healthy right up to the tick labelled "now", and pushed six empty
+  // hours onto the left — cropping the outage the chart exists to show.
+  const newest = now;
 
   const series: number[] = [];
   for (let i = hours - 1; i >= 0; i--) {
@@ -56,8 +61,14 @@ export function toPath(
   return { line, area, peak: max > 0 ? coords[peakIndex] : null };
 }
 
-export function CheckInChart({ points }: { points: CheckInPoint[] }) {
-  const { line, area, peak } = toPath(points);
+export function CheckInChart({
+  points,
+  now,
+}: {
+  points: CheckInPoint[];
+  now?: Date;
+}) {
+  const { line, area, peak } = toPath(points, 24, now);
   const total = points.reduce((sum, p) => sum + p.count, 0);
 
   if (total === 0) {

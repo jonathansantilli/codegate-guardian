@@ -26,7 +26,7 @@ function report(
     agentVersion: "1.1.0",
     collectedAt: receivedAt,
     receivedAt,
-    kbVersion: "2026-08-20",
+    kbVersion: "2026.08.20.1",
     toolsDetected: [{ name: "claude-code", version_range: ">=1.0.0" }],
     items: [
       {
@@ -209,7 +209,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
     const detail = await repository.findHostDetail(hostId);
     assert.ok(detail);
     assert.equal(detail.host.machineId, MACHINE_A);
-    assert.equal(detail.kbVersion, "2026-08-20");
+    assert.equal(detail.kbVersion, "2026.08.20.1");
     assert.equal(detail.items.length, 2);
     assert.equal(detail.items[0].tool, "claude-code");
     assert.deepEqual(detail.items[0].riskSurface, ["prompt-injection"]);
@@ -882,5 +882,276 @@ describe("Feature: suppression, ownership and enrolment (Drizzle-Postgres)", () 
     const codes = await repository.listEnrolmentCodes(now);
     assert.equal(codes.find((c) => c.code === "GOOD")?.usable, true);
     assert.equal(codes.find((c) => c.code === "STALE")?.usable, false);
+  });
+});
+
+/**
+ * The numbers the console leads with.
+ *
+ * Every case here is one an adversarial review found wrong: each would have
+ * been caught by a test in this file, and none of them was.
+ */
+describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  const NOW = new Date("2026-08-22T12:00:00Z");
+  const CRITICAL: RecordFindingInput = {
+    findingId: "f-agg",
+    ruleId: "known-malicious-content",
+    fingerprint: "fp-agg",
+    severity: "CRITICAL",
+    category: null,
+    layer: null,
+    filePath: "/Users/jsantilli/.claude/skills/podcast/SKILL.md",
+    contentHash: `sha256:${"a".repeat(64)}`,
+    line: null,
+    column: null,
+    description: "Skill matches a known-bad indicator",
+    evidence: null,
+    owasp: [],
+    cwe: null,
+    confidence: null,
+    fixable: null,
+    suppressed: false,
+  };
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    if (harness) {
+      await harness.stop();
+    }
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  it("Given machines report different feed versions, when reading the overview, then it names the newest version, not the last one received", async () => {
+    // The old query ordered by arrival, so one machine on an ancient feed
+    // reporting last made the whole fleet look stale — and blanked the
+    // console with a degraded screen.
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_A,
+        kbVersion: "2026.08.20.1",
+        receivedAt: new Date("2026-08-22T10:00:00Z"),
+      })
+    );
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_B,
+        hostname: "other-laptop",
+        kbVersion: "2026.01.01.1",
+        receivedAt: new Date("2026-08-22T11:00:00Z"),
+      })
+    );
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.contentFeed.version, "2026.08.20.1");
+    assert.equal(overview.contentFeed.ageDays, 2);
+  });
+
+  it("Given hourly buckets, when reading the overview, then they are true UTC instants", async () => {
+    await repository.recordReport(
+      report({ receivedAt: new Date("2026-08-22T02:30:00Z") })
+    );
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.checkInsPerHour.length, 1);
+    assert.equal(
+      overview.checkInsPerHour[0].hour.toISOString(),
+      "2026-08-22T02:00:00.000Z"
+    );
+  });
+
+  it("Given two machines carry byte-identical files at different paths, when grouping, then it is one variant on two machines", async () => {
+    // The invariant the console exists to express: identity is the content.
+    const hash = `sha256:${"c".repeat(64)}`;
+    const item = (path: string) => ({
+      tool: "claude-code",
+      kind: "skill" as const,
+      itemType: "file",
+      scope: "user" as const,
+      pattern: null,
+      path,
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: null,
+    });
+
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_A,
+        items: [item("/Users/alice/.claude/skills/podcast/SKILL.md")],
+      })
+    );
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_B,
+        hostname: "bob-laptop",
+        items: [item("/Users/bob/.claude/skills/podcast/SKILL.md")],
+      })
+    );
+
+    const [group] = await repository.listArtifactGroups();
+
+    assert.equal(group.name, "SKILL.md");
+    assert.equal(group.variants.length, 1, "identical bytes are one variant");
+    assert.equal(group.variants[0].machineCount, 2);
+    assert.equal(group.variants[0].paths.length, 2);
+  });
+
+  it("Given one machine carries the same bytes at two paths, when reading the artifact, then it is one machine", async () => {
+    const hash = `sha256:${"d".repeat(64)}`;
+    const item = (path: string) => ({
+      tool: "claude-code",
+      kind: "skill" as const,
+      itemType: "file",
+      scope: "user" as const,
+      pattern: null,
+      path,
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: null,
+    });
+
+    await repository.recordReport(
+      report({
+        items: [
+          item("/Users/jsantilli/.claude/skills/podcast/SKILL.md"),
+          item("/Users/jsantilli/work/repo/.claude/skills/podcast/SKILL.md"),
+        ],
+      })
+    );
+
+    const variant = await repository.findArtifactVariant(hash);
+
+    assert.ok(variant);
+    assert.equal(variant.machines.length, 1);
+    assert.equal(variant.machines[0].paths.length, 2);
+  });
+
+  it("Given a fleet-wide suppression, when reading a machine and its policies, then neither still counts the finding", async () => {
+    await repository.recordReport(report({ findings: [CRITICAL] }));
+    const [host] = await repository.listHostSummaries();
+    await repository.savePolicy({
+      name: "Known-malicious content",
+      ruleId: "known-malicious-content",
+      severity: "CRITICAL",
+      enabled: true,
+      createdBy: "operator",
+      now: NOW,
+    });
+
+    assert.equal(
+      (await repository.findHostDetail(host.host.id))?.findings.length,
+      1
+    );
+    assert.equal((await repository.listPolicies())[0].violatingMachines, 1);
+
+    await repository.suppressFinding({
+      scope: "fleet",
+      ruleId: "known-malicious-content",
+      reason: "Reviewed with the owner",
+      createdBy: "operator",
+      createdAt: NOW,
+    });
+
+    // A suppression that empties the queue but leaves the machine page red
+    // and the policy at 0% is worse than no suppression at all.
+    const detail = await repository.findHostDetail(host.host.id);
+    assert.equal(detail?.findings.length, 0, "machine page");
+    assert.equal(
+      detail?.reports[0].findingsTotal,
+      1,
+      "history keeps the record"
+    );
+    assert.equal(
+      (await repository.listPolicies())[0].violatingMachines,
+      0,
+      "policy"
+    );
+    assert.equal((await repository.listAttention()).length, 0, "queue");
+  });
+
+  it("Given a finding acknowledged on one machine, when reading the overview, then the other machine is still untriaged", async () => {
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, findings: [CRITICAL] })
+    );
+    await repository.recordReport(
+      report({ machineId: MACHINE_B, hostname: "other", findings: [CRITICAL] })
+    );
+
+    const hosts = await repository.listHostSummaries();
+    await repository.acknowledgeFinding({
+      hostId: hosts[0].host.id,
+      fingerprint: "fp-agg",
+      acknowledgedBy: "operator",
+      acknowledgedAt: NOW,
+    });
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.untriagedFindings, 1);
+  });
+
+  it("Given a machine is revoked, when reading the overview, then it counts as neither enrolled nor reporting", async () => {
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, findings: [CRITICAL] })
+    );
+    await repository.recordReport(
+      report({ machineId: MACHINE_B, hostname: "other", receivedAt: NOW })
+    );
+    const hosts = await repository.listHostSummaries();
+    const target = hosts.find((h) => h.host.machineId === MACHINE_A);
+
+    await repository.revokeHost({
+      hostId: target?.host.id ?? "",
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.hostsEnrolled, 1);
+    // Its findings can never close, so they must not sit in the queue.
+    assert.equal(overview.attentionTotal, 0);
+    assert.equal(overview.machinesWithFindings, 0);
+  });
+
+  it("Given one machine reports a finding twice, when listing suppressions, then the blast radius is one machine", async () => {
+    await repository.recordReport(
+      report({
+        findings: [CRITICAL],
+        receivedAt: new Date("2026-08-22T06:00:00Z"),
+      })
+    );
+    await repository.recordReport(
+      report({
+        findings: [CRITICAL],
+        receivedAt: new Date("2026-08-22T11:00:00Z"),
+      })
+    );
+
+    await repository.suppressFinding({
+      scope: "fleet",
+      fingerprint: "fp-agg",
+      reason: "Accepted risk",
+      createdBy: "operator",
+      createdAt: NOW,
+    });
+
+    const [suppression] = await repository.listSuppressions();
+
+    assert.equal(suppression.blastRadius, 1);
   });
 });

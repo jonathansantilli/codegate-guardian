@@ -94,10 +94,9 @@ jobs:
       AUTH_SECRET: ci-test-auth-secret-ci-test-auth-secret-ci
       POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
       NEXT_PUBLIC_BASE_PATH: ""
-      # LLM-dependent E2E tests require one of these keys. In Phase 4+
-      # the LLM port will let us stub this reliably; until then, the
-      # smoke subset runs only against API-independent scenarios.
-      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      # Without this the ingest endpoint is closed, so the agent tests would
+      # be asserting the wrong refusal.
+      AGENT_INGEST_TOKEN: ci-agent-ingest-token-ci-agent-ingest-token
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -120,7 +119,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Apply database migrations
         run: pnpm db:migrate
-      - name: Run E2E smoke subset
+      - name: Build
+        run: pnpm build
+      - name: Start the server
+        run: |
+          pnpm start &
+          npx wait-on http://localhost:3000/ping --timeout 120000
+      - name: Run E2E
         run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: always() && !cancelled()

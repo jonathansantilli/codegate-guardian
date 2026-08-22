@@ -80,6 +80,26 @@ const CHECK_IN_WINDOW_HOURS = 24;
  */
 const REPORTING_WINDOW_MS = 24 * HOUR_MS;
 
+/**
+ * An artifact's display name: the last segment of its path.
+ *
+ * Handles both separators, because a Windows agent reports
+ * `C:\\Users\\x\\.claude\\skills\\foo\\SKILL.md` and a slash-only split would
+ * make the whole path the name — so Windows machines would never group with
+ * each other, let alone with anyone else.
+ */
+export function artifactName(path: string): string {
+  const segments = path.split(/[/\\]/);
+  return segments.at(-1) || path;
+}
+
+/** The same rule in SQL, for grouping that has to happen in the database. */
+// Backslashes are folded to slashes before taking the last segment: a
+// character class containing a backslash has to survive both the SQL string
+// literal and the regex parser, and chr(92) is unambiguous in a way that
+// escaping is not.
+const SQL_ARTIFACT_NAME = sql`regexp_replace(translate(${hostInventoryItem.path}, chr(92), '/'), '^.*/', '')`;
+
 /** Written by the ingest endpoint when a check-in is turned away. */
 const CHECK_IN_REJECTED = "Check-in rejected";
 
@@ -557,9 +577,13 @@ export class DrizzleFleetRepository implements FleetRepository {
         )
       );
 
-    return rows.sort(
-      (a, b) => severityRank(a.severity) - severityRank(b.severity)
-    );
+    // An operator's suppression has to reach here too. Filtering only on the
+    // agent-side flag meant a fleet-wide suppression emptied the queue while
+    // the machine's own page still showed a red "1 open · 1 critical" badge.
+    const live = await this.liveSuppressions();
+    return rows
+      .filter((row) => !isSuppressedBy(live, { ...row, hostId }))
+      .sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
   }
 
   /** What the machine has sent, newest first, with what each report carried. */
@@ -592,9 +616,14 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostFinding)
       .where(
-        inArray(
-          hostFinding.reportId,
-          reports.map((r) => r.id)
+        and(
+          inArray(
+            hostFinding.reportId,
+            reports.map((r) => r.id)
+          ),
+          // The Findings tab excludes these; the History tab counted them, so
+          // one machine read "1 open" beside "Findings 2".
+          eq(hostFinding.suppressed, false)
         )
       )
       .groupBy(hostFinding.reportId);
@@ -643,7 +672,10 @@ export class DrizzleFleetRepository implements FleetRepository {
       .from(hostFinding)
       .innerJoin(latest, eq(hostFinding.reportId, latest.id))
       .innerJoin(host, eq(hostFinding.hostId, host.id))
-      .where(eq(hostFinding.suppressed, false));
+      // A revoked machine cannot report again, so its findings can never
+      // close. Leaving them here would mean a permanent, unactionable row at
+      // the top of "act on these first".
+      .where(and(eq(hostFinding.suppressed, false), isNull(host.revokedAt)));
 
     const live = await this.liveSuppressions();
     const visible = rows.filter((row) => !isSuppressedBy(live, row));
@@ -676,15 +708,26 @@ export class DrizzleFleetRepository implements FleetRepository {
    * laptop to be counted.
    */
   async overview(now: Date): Promise<FleetOverview> {
-    const hosts = await this.db.select().from(host);
+    // A revoked machine is not part of the fleet being measured: this server
+    // refuses its reports, so its findings can never be resolved and would
+    // sit in the queue forever with no action available. Its record stays —
+    // the Machines page lists it under its own filter — but it is out of
+    // every active count, which is also what the Machines page already did.
+    const allHosts = await this.db.select().from(host);
+    const hosts = allHosts.filter((row) => row.revokedAt === null);
     const attention = await this.listAttention(Number.MAX_SAFE_INTEGER);
 
     const reportingSince = new Date(now.getTime() - REPORTING_WINDOW_MS);
     const dayStart = new Date(now.getTime() - CHECK_IN_WINDOW_HOURS * HOUR_MS);
 
+    // Returned as epoch milliseconds rather than a timestamp: a raw sql<Date>
+    // expression skips Drizzle's timestamp mapper, so postgres.js parses the
+    // bare `timestamp without time zone` as the SERVER's local time and every
+    // bucket comes back shifted by its UTC offset — on a card labelled UTC,
+    // beside a "last check-in" stat read from a typed column that is correct.
     const perHour = await this.db
       .select({
-        hour: sql<Date>`date_trunc('hour', ${hostReport.receivedAt})`,
+        hourMs: sql<string>`(extract(epoch from date_trunc('hour', ${hostReport.receivedAt})) * 1000)::bigint`,
         count: sql<number>`count(*)::int`,
       })
       .from(hostReport)
@@ -709,13 +752,18 @@ export class DrizzleFleetRepository implements FleetRepository {
       .limit(REJECTION_LIMIT);
 
     const ownerByHostname = new Map(hosts.map((h) => [h.hostname, h.owner]));
-    const acknowledged = await this.acknowledgedFingerprints();
+    const acknowledged = await this.acknowledgedOnHost();
 
+    // The NEWEST VERSION any machine reports, not the version in the newest
+    // report. Ordering by arrival meant one machine on an old feed, reporting
+    // last, made the whole fleet look stale — and tripped the degraded screen
+    // that replaces the entire overview, flickering back moments later.
+    // Versions are dated (2026.08.20.1), so they sort lexically.
     const [newest] = await this.db
       .select({ kbVersion: hostReport.kbVersion })
       .from(hostReport)
       .where(isNotNull(hostReport.kbVersion))
-      .orderBy(desc(hostReport.receivedAt))
+      .orderBy(desc(hostReport.kbVersion))
       .limit(1);
     const newestKbVersion = newest?.kbVersion ?? null;
 
@@ -735,11 +783,13 @@ export class DrizzleFleetRepository implements FleetRepository {
         attention.map((row) => row.team ?? "Unassigned")
       ).size,
       openFindings: attention.length,
+      attentionTotal: attention.length,
+      machinesWithFindings: new Set(attention.map((row) => row.hostId)).size,
       untriagedFindings: attention.filter(
-        (row) => !acknowledged.has(row.fingerprint)
+        (row) => !acknowledged.has(`${row.hostId}::${row.fingerprint}`)
       ).length,
       checkInsPerHour: perHour.map((row) => ({
-        hour: new Date(row.hour),
+        hour: new Date(Number(row.hourMs)),
         count: row.count,
       })),
       // The hour buckets above are for the chart; "last check-in" has to be
@@ -755,11 +805,21 @@ export class DrizzleFleetRepository implements FleetRepository {
     };
   }
 
-  private async acknowledgedFingerprints(): Promise<Set<string>> {
+  /**
+   * Which findings are acknowledged, ON WHICH MACHINE.
+   *
+   * The table is keyed (hostId, fingerprint) because taking responsibility is
+   * per machine — the same malicious skill on two laptops is two people to
+   * talk to. Reading it per fingerprint marked both triaged when one was.
+   */
+  private async acknowledgedOnHost(): Promise<Set<string>> {
     const rows = await this.db
-      .select({ fingerprint: findingAcknowledgement.fingerprint })
+      .select({
+        hostId: findingAcknowledgement.hostId,
+        fingerprint: findingAcknowledgement.fingerprint,
+      })
       .from(findingAcknowledgement);
-    return new Set(rows.map((row) => row.fingerprint));
+    return new Set(rows.map((row) => `${row.hostId}::${row.fingerprint}`));
   }
   /**
    * Fleet-wide artifacts keyed by content hash.
@@ -812,14 +872,14 @@ export class DrizzleFleetRepository implements FleetRepository {
       return null;
     }
 
-    const name = rows[0].path.split("/").pop() || rows[0].path;
+    const name = artifactName(rows[0].path);
 
     // Every other distinct file sharing this name — the variant next to it is
     // usually the one it is being mistaken for.
     const siblingRows = await this.db
       .select({
         contentHash: hostInventoryItem.contentHash,
-        path: hostInventoryItem.path,
+        paths: sql<string[]>`array_agg(distinct ${hostInventoryItem.path})`,
         machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
         firstSeenAt: sql<Date>`min(${hostReport.collectedAt})`,
       })
@@ -831,10 +891,10 @@ export class DrizzleFleetRepository implements FleetRepository {
           eq(hostInventoryItem.tool, rows[0].tool),
           eq(hostInventoryItem.exists, true),
           isNotNull(hostInventoryItem.contentHash),
-          sql`regexp_replace(${hostInventoryItem.path}, '^.*/', '') = ${name}`
+          sql`${SQL_ARTIFACT_NAME} = ${name}`
         )
       )
-      .groupBy(hostInventoryItem.contentHash, hostInventoryItem.path);
+      .groupBy(hostInventoryItem.contentHash);
 
     const siblings: ArtifactVariant[] = siblingRows
       .filter((row) => row.contentHash !== contentHash)
@@ -842,8 +902,35 @@ export class DrizzleFleetRepository implements FleetRepository {
         contentHash: row.contentHash as string,
         machineCount: row.machineCount,
         firstSeenAt: new Date(row.firstSeenAt),
-        paths: [row.path],
+        paths: row.paths,
       }));
+
+    // One row per inventory item, so a machine carrying these bytes at two
+    // paths appears twice — as two machines in the count, two rows in the
+    // list under a duplicate key, and "the 2 machines carrying it" in the
+    // suppression confirmation. Collapse to one entry per machine, keeping
+    // every path it was found at.
+    const byMachine = new Map<
+      string,
+      ArtifactVariantDetail["machines"][number]
+    >();
+    for (const row of rows) {
+      const existing = byMachine.get(row.hostId);
+      if (existing) {
+        if (!existing.paths.includes(row.path)) {
+          existing.paths.push(row.path);
+        }
+        continue;
+      }
+      byMachine.set(row.hostId, {
+        hostId: row.hostId,
+        hostname: row.hostname,
+        owner: row.owner,
+        team: row.team,
+        paths: [row.path],
+        lastSeenAt: row.lastSeenAt,
+      });
+    }
 
     return {
       contentHash,
@@ -853,14 +940,7 @@ export class DrizzleFleetRepository implements FleetRepository {
       firstSeenAt: new Date(
         Math.min(...rows.map((row) => row.collectedAt.getTime()))
       ),
-      machines: rows.map((row) => ({
-        hostId: row.hostId,
-        hostname: row.hostname,
-        owner: row.owner,
-        team: row.team,
-        path: row.path,
-        lastSeenAt: row.lastSeenAt,
-      })),
+      machines: [...byMachine.values()],
       siblings,
     };
   }
@@ -878,10 +958,14 @@ export class DrizzleFleetRepository implements FleetRepository {
       .select({
         tool: hostInventoryItem.tool,
         kind: hostInventoryItem.kind,
-        path: hostInventoryItem.path,
         contentHash: hostInventoryItem.contentHash,
         machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
         firstSeenAt: sql<Date>`min(${hostReport.collectedAt})`,
+        // Every path the identical bytes were found at. Grouping BY path made
+        // one hash into several variants, so the same file under /Users/alice
+        // and /Users/bob read as "same name, different bytes" — the exact
+        // opposite of what identity-by-content means.
+        paths: sql<string[]>`array_agg(distinct ${hostInventoryItem.path})`,
       })
       .from(hostInventoryItem)
       .innerJoin(latest, eq(hostInventoryItem.reportId, latest.id))
@@ -895,7 +979,6 @@ export class DrizzleFleetRepository implements FleetRepository {
       .groupBy(
         hostInventoryItem.tool,
         hostInventoryItem.kind,
-        hostInventoryItem.path,
         hostInventoryItem.contentHash
       );
 
@@ -904,7 +987,7 @@ export class DrizzleFleetRepository implements FleetRepository {
     const groups = new Map<string, ArtifactGroup>();
 
     for (const row of rows) {
-      const name = row.path.split("/").pop() || row.path;
+      const name = artifactName(row.paths[0] ?? "");
       const key = `${row.tool}::${row.kind}::${name}`;
       const group = groups.get(key) ?? {
         name,
@@ -918,7 +1001,7 @@ export class DrizzleFleetRepository implements FleetRepository {
         contentHash: row.contentHash as string,
         machineCount: row.machineCount,
         firstSeenAt: new Date(row.firstSeenAt),
-        paths: [row.path],
+        paths: row.paths,
       });
       groups.set(key, group);
     }
@@ -930,7 +1013,7 @@ export class DrizzleFleetRepository implements FleetRepository {
       .select({
         tool: hostInventoryItem.tool,
         kind: hostInventoryItem.kind,
-        name: sql<string>`regexp_replace(${hostInventoryItem.path}, '^.*/', '')`,
+        name: sql<string>`${SQL_ARTIFACT_NAME}`,
         machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
       })
       .from(hostInventoryItem)
@@ -944,7 +1027,7 @@ export class DrizzleFleetRepository implements FleetRepository {
       .groupBy(
         hostInventoryItem.tool,
         hostInventoryItem.kind,
-        sql`regexp_replace(${hostInventoryItem.path}, '^.*/', '')`
+        SQL_ARTIFACT_NAME
       );
 
     for (const row of perName) {
@@ -1190,15 +1273,25 @@ export class DrizzleFleetRepository implements FleetRepository {
       .where(isNull(findingSuppression.revokedAt))
       .orderBy(desc(findingSuppression.createdAt));
 
+    // Only what machines currently report, and one machine counted once.
+    // Counting every historical row meant a single laptop reporting the same
+    // finding every six hours read as 28 machines — under a column headed
+    // "Machines", in the confirmation shown before agreeing to hide it.
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], { id: hostReport.id })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true))
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
     const counts = await this.db
-      .select({
+      .selectDistinct({
         fingerprint: hostFinding.fingerprint,
         ruleId: hostFinding.ruleId,
         hostId: hostFinding.hostId,
-        total: sql<number>`cast(count(*) as int)`,
       })
       .from(hostFinding)
-      .groupBy(hostFinding.fingerprint, hostFinding.ruleId, hostFinding.hostId);
+      .innerJoin(latest, eq(hostFinding.reportId, latest.id));
 
     return rows.map((row) => ({
       id: row.id,
@@ -1210,14 +1303,16 @@ export class DrizzleFleetRepository implements FleetRepository {
       createdBy: row.createdBy,
       createdAt: row.createdAt,
       expiresAt: row.expiresAt,
-      blastRadius: counts
-        .filter(
-          (c) =>
-            (row.fingerprint ? c.fingerprint === row.fingerprint : true) &&
-            (row.ruleId ? c.ruleId === row.ruleId : true) &&
-            (row.hostId ? c.hostId === row.hostId : true)
-        )
-        .reduce((sum, c) => sum + c.total, 0),
+      blastRadius: new Set(
+        counts
+          .filter(
+            (c) =>
+              (row.fingerprint ? c.fingerprint === row.fingerprint : true) &&
+              (row.ruleId ? c.ruleId === row.ruleId : true) &&
+              (row.hostId ? c.hostId === row.hostId : true)
+          )
+          .map((c) => c.hostId)
+      ).size,
     }));
   }
 
@@ -1367,24 +1462,45 @@ export class DrizzleFleetRepository implements FleetRepository {
       .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
       .as("latest");
 
-    const violations = await this.db
+    // Rows rather than a grouped count, so an operator's suppressions can be
+    // applied per machine before counting. Grouping in SQL made a suppressed
+    // rule still read "1 of 1 violating" on the Policies page while the
+    // Overview said every machine passed.
+    const violationRows = await this.db
       .select({
         ruleId: hostFinding.ruleId,
-        machines: sql<number>`cast(count(distinct ${hostFinding.hostId}) as int)`,
+        hostId: hostFinding.hostId,
+        fingerprint: hostFinding.fingerprint,
       })
       .from(hostFinding)
       .innerJoin(latest, eq(hostFinding.reportId, latest.id))
-      .where(eq(hostFinding.suppressed, false))
-      .groupBy(hostFinding.ruleId);
+      .where(eq(hostFinding.suppressed, false));
+
+    const live = await this.liveSuppressions();
+    const machinesByRule = new Map<string, Set<string>>();
+    for (const row of violationRows) {
+      if (isSuppressedBy(live, row)) {
+        continue;
+      }
+      const machines = machinesByRule.get(row.ruleId) ?? new Set<string>();
+      machines.add(row.hostId);
+      machinesByRule.set(row.ruleId, machines);
+    }
 
     const [{ evaluated } = { evaluated: 0 }] = await this.db
       .select({
         evaluated: sql<number>`cast(count(distinct ${hostReport.hostId}) as int)`,
       })
       .from(hostReport)
-      .where(eq(hostReport.findingsReported, true));
+      .innerJoin(host, eq(hostReport.hostId, host.id))
+      // Same fleet the Overview measures: a revoked machine is not evaluated.
+      .where(
+        and(eq(hostReport.findingsReported, true), isNull(host.revokedAt))
+      );
 
-    const byRule = new Map(violations.map((v) => [v.ruleId, v.machines]));
+    const byRule = new Map(
+      [...machinesByRule].map(([ruleId, machines]) => [ruleId, machines.size])
+    );
 
     return policies.map((row) => ({
       id: row.id,
