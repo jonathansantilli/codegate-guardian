@@ -78,6 +78,20 @@
       "when": 1787431619156,
       "tag": "0010_sticky_slayback",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787431620156,
+      "tag": "0011_retire_guest_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787434114233,
+      "tag": "0012_nice_molten_man",
+      "breakpoints": true
     }
   ]
 }

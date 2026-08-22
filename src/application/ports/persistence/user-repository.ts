@@ -13,4 +13,12 @@ export type CreateUserInput = {
 export type UserRepository = {
   findByEmail(email: string): Promise<User[]>;
   create(input: CreateUserInput): Promise<void>;
+  /**
+   * Creates the instance's first operator, and only if there is none.
+   *
+   * Atomic because "is this the first user" and "create the user" as two
+   * statements let two requests racing at first boot both claim the console.
+   * Returns false when someone got there first.
+   */
+  createFirst(input: CreateUserInput): Promise<boolean>;
 };

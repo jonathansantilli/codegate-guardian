@@ -68,7 +68,10 @@ export const host = pgTable(
   (table) => ({
     machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),
     lastSeenIdx: index("Host_v1_last_seen_idx").on(table.lastSeenAt),
-    agentTokenIdx: index("Host_v1_agent_token_idx").on(table.agentTokenHash),
+    // Unique, so "one token identifies one machine" is enforced rather than
+    // trusted to 256 bits of entropy. Nulls do not collide in Postgres, so
+    // machines awaiting enrolment are unaffected.
+    agentTokenKey: unique("Host_v1_agent_token_key").on(table.agentTokenHash),
   })
 );
 

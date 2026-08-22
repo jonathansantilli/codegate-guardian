@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type {
   CreateUserInput,
   UserRepository,
@@ -21,5 +21,18 @@ export class DrizzleUserRepository implements UserRepository {
     await this.db
       .insert(user)
       .values({ email: input.email, password: input.passwordHash });
+  }
+
+  async createFirst(input: CreateUserInput): Promise<boolean> {
+    // One statement, so the "no users yet" test and the insert cannot be
+    // interleaved by a second request arriving at the same moment.
+    const inserted = await this.db.execute(sql`
+      insert into ${user} (email, password)
+      select ${input.email}, ${input.passwordHash}
+      where not exists (select 1 from ${user})
+      returning id
+    `);
+
+    return inserted.length > 0;
   }
 }

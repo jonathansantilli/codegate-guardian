@@ -1,10 +1,11 @@
 import "server-only";
 
+import { count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { DrizzleUserRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/user-repository";
 import { ChatbotError } from "../errors";
-import type { User } from "./schema";
+import { type User, user } from "./schema";
 import { generateHashedPassword } from "./utils";
 
 /**
@@ -32,6 +33,36 @@ export async function createUser(email: string, password: string) {
 
   try {
     await userRepository.create({ email, passwordHash: hashedPassword });
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to create user");
+  }
+}
+
+/**
+ * Whether this instance has an operator yet.
+ *
+ * A fresh install has to let someone in to become the first operator; after
+ * that, self-service registration would hand console authority — including
+ * minting enrolment codes — to anyone who can reach the port.
+ */
+export async function hasAnyUser(): Promise<boolean> {
+  const [row] = await db.select({ total: count() }).from(user);
+  return (row?.total ?? 0) > 0;
+}
+
+/**
+ * Creates the first operator, atomically, and only when there is none.
+ * Returns false if this instance already has one.
+ */
+export async function createFirstUser(
+  email: string,
+  password: string
+): Promise<boolean> {
+  try {
+    return await userRepository.createFirst({
+      email,
+      passwordHash: generateHashedPassword(password),
+    });
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to create user");
   }

@@ -59,7 +59,7 @@ single-use and expiring by default. On the machine:
 
 ```bash
 npx codegate-ai enrol --server https://guardian.example.internal --code FLEET-XXXX-XXXX
-codegate report
+npx codegate-ai report
 ```
 
 Enrolment issues that machine **its own reporting token**, which the agent
@@ -69,6 +69,35 @@ report as any machine, and by omitting findings, mark it clean.
 
 For a fleet rollout, mint a multi-use code and ship the server URL and code
 through your MDM.
+
+## Upgrading from a version before per-machine tokens
+
+**Every enrolled machine must enrol again, and the fleet goes quiet the moment
+you upgrade — not gradually.**
+
+Agents used to authenticate with the shared `AGENT_INGEST_TOKEN`. They now
+each hold a token issued at enrolment, because a shared secret let any agent
+report as any machine and, by omitting findings, mark it clean. A machine
+still presenting the old token is refused with `401 unknown_token`.
+
+You will see this on **Activity**: every refused check-in is recorded with the
+reason, so a screen full of `401 unknown_token` means "these machines predate
+per-machine tokens", not "something is misconfigured".
+
+To fix a machine, mint a code under **API & access** and enrol it again. Its
+history, ownership and findings are kept — the row is the same, only the
+credential changes.
+
+Two things that changed meaning:
+
+- `AGENT_INGEST_TOKEN` no longer authenticates anything. Its presence is what
+  says this server accepts enrolments. Rotating it does not affect machines
+  that are already enrolled, and does not fix ones that are not.
+- Enrolment **creates** machines; it never re-binds an existing one. A machine
+  that already has a row is refused with `409`. That is what stops anyone
+  holding a cohort code from seizing another machine's identity — and what
+  stops a revoked machine lifting its own revocation. Re-admitting a machine
+  is an operator action: **Restore enrolment** on its page.
 
 ## Configuration
 
@@ -87,6 +116,13 @@ Everything else has a working default; see `.env.example` for the full list.
 There is no anonymous access. An unauthenticated browser is sent to `/login`;
 an unauthenticated API call is answered `401`. Agents authenticate with their
 own bearer token rather than a session cookie.
+
+**The first person to register becomes the operator**, and registration closes
+behind them — after that, only a signed-in operator can create an account.
+Note the window this leaves: between `docker compose up` and you registering,
+whoever reaches the port first claims the instance. The compose stack binds
+`0.0.0.0:3000`, so put it behind your network controls, or register
+immediately after starting it.
 
 ## Development
 

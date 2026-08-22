@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { createUser, getUser } from "@/lib/db/queries";
+import { createFirstUser, createUser, getUser } from "@/lib/db/queries";
 
 import { signIn } from "./auth";
 
@@ -48,6 +48,7 @@ export type RegisterActionState = {
     | "success"
     | "failed"
     | "user_exists"
+    | "closed"
     | "invalid_data";
 };
 
@@ -66,7 +67,29 @@ export const register = async (
     if (user) {
       return { status: "user_exists" } as RegisterActionState;
     }
-    await createUser(validatedData.email, validatedData.password);
+
+    // The first account bootstraps the instance; after that, creating one is
+    // an operator's job. Left open, reaching the port was one POST away from
+    // full console authority — every machine, the fleet export, and minting
+    // enrolment codes.
+    //
+    // The check lives here rather than in the proxy's public-path list: a
+    // server action is dispatched by its id, not by the path it was posted
+    // to, so it can be invoked through any public route.
+    const { auth } = await import("./auth");
+    const session = await auth();
+
+    if (session?.user) {
+      await createUser(validatedData.email, validatedData.password);
+    } else {
+      const claimed = await createFirstUser(
+        validatedData.email,
+        validatedData.password
+      );
+      if (!claimed) {
+        return { status: "closed" } as RegisterActionState;
+      }
+    }
     await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,
