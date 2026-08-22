@@ -514,3 +514,262 @@ describe("Feature: finding lifecycle (Drizzle-Postgres)", () => {
     assert.equal(found.contentHash, `sha256:${"b".repeat(64)}`);
   });
 });
+
+describe("Feature: suppression, ownership and enrolment (Drizzle-Postgres)", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    if (harness) await harness.stop();
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  const finding = (
+    overrides: Partial<RecordFindingInput> = {}
+  ): RecordFindingInput => ({
+    findingId: "f-1",
+    ruleId: "mcp-server-unpinned",
+    fingerprint: "sha256:fp-1",
+    severity: "MEDIUM",
+    category: null,
+    layer: null,
+    filePath: "/repo/.cursor/mcp.json",
+    contentHash: null,
+    line: null,
+    column: null,
+    description: "MCP server is not pinned to a version",
+    evidence: null,
+    owasp: [],
+    cwe: null,
+    confidence: null,
+    fixable: null,
+    suppressed: false,
+    ...overrides,
+  });
+
+  it("Given an owner is assigned, when listing machines, then the person is shown", async () => {
+    const { hostId } = await repository.recordReport(report());
+    await repository.assignOwner({
+      hostId,
+      owner: "Jonathan Santilli",
+      team: "Engineering",
+    });
+
+    const [summary] = await repository.listHostSummaries();
+    assert.equal(summary.host.owner, "Jonathan Santilli");
+    assert.equal(summary.host.team, "Engineering");
+  });
+
+  it("Given an owner is cleared, when listing, then nobody is claimed accountable", async () => {
+    const { hostId } = await repository.recordReport(report());
+    await repository.assignOwner({
+      hostId,
+      owner: "Jonathan Santilli",
+      team: "Engineering",
+    });
+    await repository.assignOwner({ hostId, owner: null, team: null });
+
+    const [summary] = await repository.listHostSummaries();
+    assert.equal(summary.host.owner, null);
+  });
+
+  it("Given a fleet-wide suppression, when listing findings, then it is hidden everywhere", async () => {
+    await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+    assert.equal((await repository.listFindings()).length, 1);
+
+    await repository.suppressFinding({
+      scope: "fleet",
+      ruleId: "mcp-server-unpinned",
+      reason: "Accepted risk for internal registry",
+      createdBy: "Jonathan Santilli",
+      createdAt: new Date("2026-08-22T12:00:00Z"),
+    });
+
+    assert.deepEqual(await repository.listFindings(), []);
+  });
+
+  // Silencing one laptop must not silence the fleet.
+  it("Given a machine-scoped suppression, when listing, then other machines still report it", async () => {
+    const a = await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+
+    await repository.suppressFinding({
+      scope: "machine",
+      hostId: a.hostId,
+      fingerprint: "sha256:fp-1",
+      reason: "Known good on the build box",
+      createdBy: "Jonathan Santilli",
+      createdAt: new Date("2026-08-22T12:00:00Z"),
+    });
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.machineCount, 1);
+  });
+
+  it("Given an expired suppression, when listing, then the finding is reported again", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    await repository.suppressFinding({
+      scope: "fleet",
+      ruleId: "mcp-server-unpinned",
+      reason: "Temporary",
+      createdBy: "Jonathan Santilli",
+      createdAt: new Date("2026-08-01T12:00:00Z"),
+      expiresAt: new Date("2026-08-02T12:00:00Z"),
+    });
+
+    assert.equal((await repository.listFindings()).length, 1);
+  });
+
+  it("Given a revoked suppression, when listing, then the finding returns", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    const { id } = await repository.suppressFinding({
+      scope: "fleet",
+      ruleId: "mcp-server-unpinned",
+      reason: "Mistake",
+      createdBy: "Jonathan Santilli",
+      createdAt: new Date("2026-08-22T12:00:00Z"),
+    });
+    assert.deepEqual(await repository.listFindings(), []);
+
+    await repository.revokeSuppression({
+      id,
+      revokedAt: new Date("2026-08-22T13:00:00Z"),
+    });
+    assert.equal((await repository.listFindings()).length, 1);
+  });
+
+  it("Given a suppression, when listing them, then its blast radius and reason are shown", async () => {
+    await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+    await repository.suppressFinding({
+      scope: "fleet",
+      ruleId: "mcp-server-unpinned",
+      reason: "Accepted risk for internal registry",
+      createdBy: "Jonathan Santilli",
+      createdAt: new Date("2026-08-22T12:00:00Z"),
+    });
+
+    const [suppression] = await repository.listSuppressions();
+    assert.equal(suppression.blastRadius, 2);
+    assert.equal(suppression.reason, "Accepted risk for internal registry");
+    assert.equal(suppression.scope, "fleet");
+  });
+
+  it("Given a suppression naming nothing, when created, then it is refused", async () => {
+    await assert.rejects(
+      () =>
+        repository.suppressFinding({
+          scope: "fleet",
+          reason: "no",
+          createdBy: "x",
+          createdAt: new Date(),
+        }),
+      /must name a fingerprint or a rule/
+    );
+  });
+
+  it("Given a machine-scoped suppression with no machine, when created, then it is refused", async () => {
+    await assert.rejects(
+      () =>
+        repository.suppressFinding({
+          scope: "machine",
+          ruleId: "r",
+          reason: "no",
+          createdBy: "x",
+          createdAt: new Date(),
+        }),
+      /must name a machine/
+    );
+  });
+
+  it("Given a capped enrolment code, when redeemed to its limit, then further use is refused", async () => {
+    const now = new Date("2026-08-22T12:00:00Z");
+    await repository.mintEnrolmentCode({
+      code: "FLEET-7K2M-9XQ4",
+      label: "Engineering rollout",
+      maxUses: 2,
+      createdBy: "Jonathan Santilli",
+      createdAt: now,
+      expiresAt: new Date("2026-08-23T12:00:00Z"),
+    });
+
+    assert.ok(
+      await repository.redeemEnrolmentCode({ code: "FLEET-7K2M-9XQ4", now })
+    );
+    assert.ok(
+      await repository.redeemEnrolmentCode({ code: "FLEET-7K2M-9XQ4", now })
+    );
+    assert.equal(
+      await repository.redeemEnrolmentCode({ code: "FLEET-7K2M-9XQ4", now }),
+      null
+    );
+  });
+
+  it("Given an expired code, when redeemed, then it is refused", async () => {
+    await repository.mintEnrolmentCode({
+      code: "OLD-CODE",
+      maxUses: 10,
+      createdBy: "x",
+      createdAt: new Date("2026-08-01T12:00:00Z"),
+      expiresAt: new Date("2026-08-02T12:00:00Z"),
+    });
+
+    assert.equal(
+      await repository.redeemEnrolmentCode({
+        code: "OLD-CODE",
+        now: new Date("2026-08-22T12:00:00Z"),
+      }),
+      null
+    );
+  });
+
+  it("Given an unknown code, when redeemed, then it is refused", async () => {
+    assert.equal(
+      await repository.redeemEnrolmentCode({ code: "NOPE", now: new Date() }),
+      null
+    );
+  });
+
+  it("Given codes exist, when listing, then usability is stated for each", async () => {
+    const now = new Date("2026-08-22T12:00:00Z");
+    await repository.mintEnrolmentCode({
+      code: "GOOD",
+      maxUses: 5,
+      createdBy: "x",
+      createdAt: now,
+      expiresAt: new Date("2026-08-23T12:00:00Z"),
+    });
+    await repository.mintEnrolmentCode({
+      code: "STALE",
+      maxUses: 5,
+      createdBy: "x",
+      createdAt: now,
+      expiresAt: new Date("2026-08-01T12:00:00Z"),
+    });
+
+    const codes = await repository.listEnrolmentCodes(now);
+    assert.equal(codes.find((c) => c.code === "GOOD")?.usable, true);
+    assert.equal(codes.find((c) => c.code === "STALE")?.usable, false);
+  });
+});

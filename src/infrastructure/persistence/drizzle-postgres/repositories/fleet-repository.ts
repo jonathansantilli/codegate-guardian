@@ -1,13 +1,26 @@
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import type {
   ArtifactGroup,
+  EnrolmentCodeSummary,
   FindingStatus,
   FleetFinding,
   FleetRepository,
   HostDetail,
   HostSummary,
+  MintEnrolmentCodeInput,
   RecordedReport,
   RecordHostReportInput,
+  SuppressFindingInput,
+  Suppression,
 } from "@/src/application/ports/fleet/fleet-repository";
 import type {
   InventoryItemKind,
@@ -15,7 +28,9 @@ import type {
 } from "@/src/domain/fleet/entities/host";
 import type { DrizzleDb } from "../client";
 import {
+  enrolmentCode,
   findingAcknowledgement,
+  findingSuppression,
   host,
   hostFinding,
   hostInventoryItem,
@@ -409,6 +424,29 @@ export class DrizzleFleetRepository implements FleetRepository {
       .leftJoin(latest, eq(hostFinding.hostId, latest.hostId))
       .where(eq(hostFinding.suppressed, false));
 
+    // A live suppression hides a finding from the queue. Expired and revoked
+    // ones do not: silence has to be renewed deliberately, not by default.
+    const suppressions = await this.db
+      .select()
+      .from(findingSuppression)
+      .where(isNull(findingSuppression.revokedAt));
+
+    const now = new Date();
+    const live = suppressions.filter(
+      (sup) => sup.expiresAt === null || sup.expiresAt > now
+    );
+    const isSuppressed = (row: {
+      fingerprint: string;
+      ruleId: string;
+      hostId: string;
+    }) =>
+      live.some(
+        (sup) =>
+          (sup.fingerprint === null || sup.fingerprint === row.fingerprint) &&
+          (sup.ruleId === null || sup.ruleId === row.ruleId) &&
+          (sup.hostId === null || sup.hostId === row.hostId)
+      );
+
     const acks = await this.db.select().from(findingAcknowledgement);
     const ackByKey = new Map(
       acks.map((a) => [`${a.hostId}::${a.fingerprint}`, a])
@@ -422,6 +460,9 @@ export class DrizzleFleetRepository implements FleetRepository {
     const byFingerprint = new Map<string, Accumulator>();
 
     for (const row of rows) {
+      if (isSuppressed(row)) {
+        continue;
+      }
       const entry = byFingerprint.get(row.fingerprint) ?? {
         finding: {
           fingerprint: row.fingerprint,
@@ -497,5 +538,158 @@ export class DrizzleFleetRepository implements FleetRepository {
           note: input.note ?? null,
         },
       });
+  }
+  async assignOwner(input: {
+    hostId: string;
+    owner: string | null;
+    team: string | null;
+  }): Promise<void> {
+    await this.db
+      .update(host)
+      .set({ owner: input.owner, team: input.team })
+      .where(eq(host.id, input.hostId));
+  }
+
+  async suppressFinding(input: SuppressFindingInput): Promise<{ id: string }> {
+    if (!(input.fingerprint || input.ruleId)) {
+      throw new Error("A suppression must name a fingerprint or a rule.");
+    }
+    if (input.scope === "machine" && !input.hostId) {
+      throw new Error("A machine-scoped suppression must name a machine.");
+    }
+
+    const [row] = await this.db
+      .insert(findingSuppression)
+      .values({
+        scope: input.scope,
+        hostId: input.scope === "machine" ? (input.hostId ?? null) : null,
+        fingerprint: input.fingerprint ?? null,
+        ruleId: input.ruleId ?? null,
+        reason: input.reason,
+        createdBy: input.createdBy,
+        createdAt: input.createdAt,
+        expiresAt: input.expiresAt ?? null,
+      })
+      .returning({ id: findingSuppression.id });
+
+    return { id: row.id };
+  }
+
+  /**
+   * Live suppressions with the number of currently-reported findings each one
+   * silences. Blast radius is the number an operator most needs before
+   * agreeing to hide something, so it is computed here rather than guessed.
+   */
+  async listSuppressions(): Promise<Suppression[]> {
+    const rows = await this.db
+      .select()
+      .from(findingSuppression)
+      .where(isNull(findingSuppression.revokedAt))
+      .orderBy(desc(findingSuppression.createdAt));
+
+    const counts = await this.db
+      .select({
+        fingerprint: hostFinding.fingerprint,
+        ruleId: hostFinding.ruleId,
+        hostId: hostFinding.hostId,
+        total: sql<number>`cast(count(*) as int)`,
+      })
+      .from(hostFinding)
+      .groupBy(hostFinding.fingerprint, hostFinding.ruleId, hostFinding.hostId);
+
+    return rows.map((row) => ({
+      id: row.id,
+      scope: row.scope,
+      hostId: row.hostId,
+      fingerprint: row.fingerprint,
+      ruleId: row.ruleId,
+      reason: row.reason,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+      expiresAt: row.expiresAt,
+      blastRadius: counts
+        .filter(
+          (c) =>
+            (row.fingerprint ? c.fingerprint === row.fingerprint : true) &&
+            (row.ruleId ? c.ruleId === row.ruleId : true) &&
+            (row.hostId ? c.hostId === row.hostId : true)
+        )
+        .reduce((sum, c) => sum + c.total, 0),
+    }));
+  }
+
+  async revokeSuppression(input: {
+    id: string;
+    revokedAt: Date;
+  }): Promise<void> {
+    await this.db
+      .update(findingSuppression)
+      .set({ revokedAt: input.revokedAt })
+      .where(eq(findingSuppression.id, input.id));
+  }
+
+  async mintEnrolmentCode(
+    input: MintEnrolmentCodeInput
+  ): Promise<{ id: string }> {
+    const [row] = await this.db
+      .insert(enrolmentCode)
+      .values({
+        code: input.code,
+        label: input.label ?? null,
+        maxUses: input.maxUses,
+        createdBy: input.createdBy,
+        createdAt: input.createdAt,
+        expiresAt: input.expiresAt,
+      })
+      .returning({ id: enrolmentCode.id });
+
+    return { id: row.id };
+  }
+
+  async listEnrolmentCodes(now: Date): Promise<EnrolmentCodeSummary[]> {
+    const rows = await this.db
+      .select()
+      .from(enrolmentCode)
+      .orderBy(desc(enrolmentCode.createdAt));
+
+    return rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      label: row.label,
+      maxUses: row.maxUses,
+      usedCount: row.usedCount,
+      createdBy: row.createdBy,
+      expiresAt: row.expiresAt,
+      revokedAt: row.revokedAt,
+      usable:
+        row.revokedAt === null &&
+        row.expiresAt > now &&
+        row.usedCount < row.maxUses,
+    }));
+  }
+
+  /**
+   * Spends one use, atomically. The conditions live in the UPDATE rather than
+   * in a read-then-write so two machines enrolling at once cannot both take
+   * the last use of a capped code.
+   */
+  async redeemEnrolmentCode(input: {
+    code: string;
+    now: Date;
+  }): Promise<{ id: string } | null> {
+    const [row] = await this.db
+      .update(enrolmentCode)
+      .set({ usedCount: sql`${enrolmentCode.usedCount} + 1` })
+      .where(
+        and(
+          eq(enrolmentCode.code, input.code),
+          isNull(enrolmentCode.revokedAt),
+          gt(enrolmentCode.expiresAt, input.now),
+          sql`${enrolmentCode.usedCount} < ${enrolmentCode.maxUses}`
+        )
+      )
+      .returning({ id: enrolmentCode.id });
+
+    return row ? { id: row.id } : null;
   }
 }

@@ -43,6 +43,13 @@
       "when": 1787414842185,
       "tag": "0005_strange_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787415833210,
+      "tag": "0006_condemned_vindicator",
+      "breakpoints": true
     }
   ]
 }

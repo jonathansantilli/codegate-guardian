@@ -137,6 +137,56 @@ export type ArtifactGroup = {
   machineCount: number;
 };
 
+export type SuppressionScope = "fleet" | "machine";
+
+export type SuppressFindingInput = {
+  scope: SuppressionScope;
+  /** Required for a machine-scoped suppression. */
+  hostId?: string;
+  /** One of these identifies what is silenced. */
+  fingerprint?: string;
+  ruleId?: string;
+  reason: string;
+  createdBy: string;
+  createdAt: Date;
+  expiresAt?: Date;
+};
+
+export type Suppression = {
+  id: string;
+  scope: SuppressionScope;
+  hostId: string | null;
+  fingerprint: string | null;
+  ruleId: string | null;
+  reason: string;
+  createdBy: string;
+  createdAt: Date;
+  expiresAt: Date | null;
+  /** How many currently-reported findings this silences. */
+  blastRadius: number;
+};
+
+export type MintEnrolmentCodeInput = {
+  code: string;
+  label?: string;
+  maxUses: number;
+  createdBy: string;
+  createdAt: Date;
+  expiresAt: Date;
+};
+
+export type EnrolmentCodeSummary = {
+  id: string;
+  code: string;
+  label: string | null;
+  maxUses: number;
+  usedCount: number;
+  createdBy: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  usable: boolean;
+};
+
 export type FleetRepository = {
   /** Upserts the host by machineId and stores the report and its items. */
   recordReport(input: RecordHostReportInput): Promise<RecordedReport>;
@@ -147,6 +197,23 @@ export type FleetRepository = {
   /** Findings across the fleet, with status derived from report history. */
   listFindings(): Promise<FleetFinding[]>;
   /** Records that a person has taken responsibility for a finding. */
+  /** Sets who is accountable for a machine. Display data, not authorization. */
+  assignOwner(input: {
+    hostId: string;
+    owner: string | null;
+    team: string | null;
+  }): Promise<void>;
+  /** Silences a finding, with the scope and reason recorded. */
+  suppressFinding(input: SuppressFindingInput): Promise<{ id: string }>;
+  listSuppressions(): Promise<Suppression[]>;
+  revokeSuppression(input: { id: string; revokedAt: Date }): Promise<void>;
+  mintEnrolmentCode(input: MintEnrolmentCodeInput): Promise<{ id: string }>;
+  listEnrolmentCodes(now: Date): Promise<EnrolmentCodeSummary[]>;
+  /** Spends one use of a code, or returns null when it cannot be used. */
+  redeemEnrolmentCode(input: {
+    code: string;
+    now: Date;
+  }): Promise<{ id: string } | null>;
   acknowledgeFinding(input: {
     hostId: string;
     fingerprint: string;

@@ -373,3 +373,63 @@ export const findingAcknowledgement = pgTable(
 export type FindingAcknowledgement = InferSelectModel<
   typeof findingAcknowledgement
 >;
+
+/**
+ * A decision to stop reporting a finding, with a reason and a scope.
+ *
+ * Scope matters more than anything else here: silencing a rule across the
+ * whole fleet is a very different act from silencing one file on one machine,
+ * and the console must be able to say which was done and why.
+ */
+export const findingSuppression = pgTable(
+  "FindingSuppression_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    scope: varchar("scope", { enum: ["fleet", "machine"] }).notNull(),
+    /** Null for a fleet-wide suppression. */
+    hostId: uuid("hostId").references(() => host.id, { onDelete: "cascade" }),
+    /** One of these identifies what is silenced. */
+    fingerprint: text("fingerprint"),
+    ruleId: text("ruleId"),
+    reason: text("reason").notNull(),
+    createdBy: text("createdBy").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+    /** Null means indefinite — visible as such, never hidden. */
+    expiresAt: timestamp("expiresAt"),
+    revokedAt: timestamp("revokedAt"),
+  },
+  (table) => ({
+    fingerprintIdx: index("FindingSuppression_v1_fingerprint_idx").on(
+      table.fingerprint
+    ),
+    ruleIdx: index("FindingSuppression_v1_rule_idx").on(table.ruleId),
+  })
+);
+
+export type FindingSuppression = InferSelectModel<typeof findingSuppression>;
+
+/**
+ * A single-use code that lets a machine enrol itself.
+ *
+ * `maxUses` is what makes an MDM rollout possible: one code, capped and
+ * expiring, shipped to a cohort of machines rather than minted per laptop.
+ */
+export const enrolmentCode = pgTable(
+  "EnrolmentCode_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    code: text("code").notNull(),
+    label: text("label"),
+    maxUses: integer("maxUses").notNull().default(1),
+    usedCount: integer("usedCount").notNull().default(0),
+    createdBy: text("createdBy").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    revokedAt: timestamp("revokedAt"),
+  },
+  (table) => ({
+    codeKey: unique("EnrolmentCode_v1_code_key").on(table.code),
+  })
+);
+
+export type EnrolmentCode = InferSelectModel<typeof enrolmentCode>;
