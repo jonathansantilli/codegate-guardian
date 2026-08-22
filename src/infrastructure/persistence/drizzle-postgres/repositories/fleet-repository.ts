@@ -1,6 +1,8 @@
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type {
   ArtifactGroup,
+  FindingStatus,
+  FleetFinding,
   FleetRepository,
   HostDetail,
   HostSummary,
@@ -12,7 +14,13 @@ import type {
   InventoryScope,
 } from "@/src/domain/fleet/entities/host";
 import type { DrizzleDb } from "../client";
-import { host, hostInventoryItem, hostReport } from "../schema";
+import {
+  findingAcknowledgement,
+  host,
+  hostFinding,
+  hostInventoryItem,
+  hostReport,
+} from "../schema";
 
 // Postgres caps a statement at 65535 bound parameters; inventory rows bind
 // well under a hundred each, so chunking keeps a large machine's report from
@@ -21,6 +29,30 @@ const ITEM_INSERT_CHUNK = 500;
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
+}
+
+const SEVERITY_ORDER: Record<string, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+  INFO: 4,
+};
+
+/**
+ * A finding still present in a machine's latest report is open (or
+ * acknowledged). One that has vanished from every latest report is resolved:
+ * the newer report is the evidence. Regression is detected on ingest, when a
+ * fingerprint reappears after resolving.
+ */
+function resolveStatus(
+  finding: { acknowledgedAt: Date | null },
+  openHosts: number
+): FindingStatus {
+  if (openHosts === 0) {
+    return "resolved";
+  }
+  return finding.acknowledgedAt ? "acknowledged" : "open";
 }
 
 export class DrizzleFleetRepository implements FleetRepository {
@@ -63,6 +95,7 @@ export class DrizzleFleetRepository implements FleetRepository {
           collectedAt: input.collectedAt,
           kbVersion: input.kbVersion,
           itemsTotal: input.items.length,
+          findingsReported: input.findings !== undefined,
           toolsDetected: input.toolsDetected ?? [],
           createdAt: input.receivedAt,
         })
@@ -84,6 +117,37 @@ export class DrizzleFleetRepository implements FleetRepository {
             contentHash: item.contentHash,
             riskSurface: item.riskSurface ?? [],
             resolvedAgainst: item.resolvedAgainst,
+          }))
+        );
+      }
+
+      for (
+        let i = 0;
+        i < (input.findings?.length ?? 0);
+        i += ITEM_INSERT_CHUNK
+      ) {
+        const chunk = (input.findings ?? []).slice(i, i + ITEM_INSERT_CHUNK);
+        await tx.insert(hostFinding).values(
+          chunk.map((finding) => ({
+            reportId: reportRow.id,
+            hostId: hostRow.id,
+            findingId: finding.findingId,
+            ruleId: finding.ruleId,
+            fingerprint: finding.fingerprint,
+            severity: finding.severity as "CRITICAL",
+            category: finding.category,
+            layer: finding.layer,
+            filePath: finding.filePath,
+            contentHash: finding.contentHash,
+            line: finding.line,
+            column: finding.column,
+            description: finding.description,
+            evidence: finding.evidence,
+            owasp: finding.owasp ?? [],
+            cwe: finding.cwe,
+            confidence: finding.confidence,
+            fixable: finding.fixable,
+            suppressed: finding.suppressed,
           }))
         );
       }
@@ -305,5 +369,133 @@ export class DrizzleFleetRepository implements FleetRepository {
         ),
       }))
       .sort((a, b) => b.machineCount - a.machineCount);
+  }
+  /**
+   * Findings across the fleet, with status derived from report history.
+   *
+   * A finding is OPEN while the machine's latest report still contains it,
+   * and RESOLVED once a later report does not — the absence in a newer report
+   * is the only evidence of a fix this server can ever have. REGRESSED marks
+   * one that came back after resolving. ACKNOWLEDGED is the single mutable
+   * bit: a person taking responsibility, which does not close anything.
+   */
+  async listFindings(): Promise<FleetFinding[]> {
+    // Only a report that carried findings can be evidence that one is gone.
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], {
+        id: hostReport.id,
+        hostId: hostReport.hostId,
+      })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true))
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
+    const rows = await this.db
+      .select({
+        fingerprint: hostFinding.fingerprint,
+        hostId: hostFinding.hostId,
+        ruleId: hostFinding.ruleId,
+        severity: hostFinding.severity,
+        description: hostFinding.description,
+        filePath: hostFinding.filePath,
+        contentHash: hostFinding.contentHash,
+        reportId: hostFinding.reportId,
+        collectedAt: hostReport.collectedAt,
+        isLatest: sql<boolean>`(${hostFinding.reportId} = ${latest.id})`,
+      })
+      .from(hostFinding)
+      .innerJoin(hostReport, eq(hostFinding.reportId, hostReport.id))
+      .leftJoin(latest, eq(hostFinding.hostId, latest.hostId))
+      .where(eq(hostFinding.suppressed, false));
+
+    const acks = await this.db.select().from(findingAcknowledgement);
+    const ackByKey = new Map(
+      acks.map((a) => [`${a.hostId}::${a.fingerprint}`, a])
+    );
+
+    type Accumulator = {
+      finding: FleetFinding;
+      openHosts: Set<string>;
+      seenHosts: Set<string>;
+    };
+    const byFingerprint = new Map<string, Accumulator>();
+
+    for (const row of rows) {
+      const entry = byFingerprint.get(row.fingerprint) ?? {
+        finding: {
+          fingerprint: row.fingerprint,
+          ruleId: row.ruleId,
+          severity: row.severity,
+          description: row.description,
+          filePath: row.filePath,
+          contentHash: row.contentHash,
+          status: "resolved" as FindingStatus,
+          machineCount: 0,
+          firstSeenAt: row.collectedAt,
+          lastSeenAt: row.collectedAt,
+          acknowledgedBy: null,
+          acknowledgedAt: null,
+        },
+        openHosts: new Set<string>(),
+        seenHosts: new Set<string>(),
+      };
+
+      entry.seenHosts.add(row.hostId);
+      if (row.isLatest) {
+        entry.openHosts.add(row.hostId);
+      }
+      if (row.collectedAt < entry.finding.firstSeenAt) {
+        entry.finding.firstSeenAt = row.collectedAt;
+      }
+      if (row.collectedAt > entry.finding.lastSeenAt) {
+        entry.finding.lastSeenAt = row.collectedAt;
+      }
+
+      const ack = ackByKey.get(`${row.hostId}::${row.fingerprint}`);
+      if (ack) {
+        entry.finding.acknowledgedBy = ack.acknowledgedBy;
+        entry.finding.acknowledgedAt = ack.acknowledgedAt;
+      }
+
+      byFingerprint.set(row.fingerprint, entry);
+    }
+
+    return [...byFingerprint.values()]
+      .map(({ finding, openHosts }) => ({
+        ...finding,
+        machineCount: openHosts.size,
+        status: resolveStatus(finding, openHosts.size),
+      }))
+      .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+  }
+
+  async acknowledgeFinding(input: {
+    hostId: string;
+    fingerprint: string;
+    acknowledgedBy: string;
+    acknowledgedAt: Date;
+    note?: string;
+  }): Promise<void> {
+    await this.db
+      .insert(findingAcknowledgement)
+      .values({
+        hostId: input.hostId,
+        fingerprint: input.fingerprint,
+        acknowledgedBy: input.acknowledgedBy,
+        acknowledgedAt: input.acknowledgedAt,
+        note: input.note ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [
+          findingAcknowledgement.hostId,
+          findingAcknowledgement.fingerprint,
+        ],
+        set: {
+          acknowledgedBy: input.acknowledgedBy,
+          acknowledgedAt: input.acknowledgedAt,
+          note: input.note ?? null,
+        },
+      });
   }
 }

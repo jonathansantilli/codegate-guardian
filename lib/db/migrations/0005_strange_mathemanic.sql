@@ -1,0 +1,1 @@
+ALTER TABLE "HostReport_v1" ADD COLUMN "findingsReported" boolean DEFAULT false NOT NULL;

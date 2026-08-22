@@ -4,9 +4,13 @@ import {
 } from "@/lib/security/agent-token";
 import {
   agentReportPayloadSchema,
+  type FindingPayload,
   type InventoryItemPayload,
 } from "@/src/application/ports/fleet/agent-report-payload";
-import type { RecordInventoryItemInput } from "@/src/application/ports/fleet/fleet-repository";
+import type {
+  RecordFindingInput,
+  RecordInventoryItemInput,
+} from "@/src/application/ports/fleet/fleet-repository";
 import { getContainer } from "@/src/infrastructure";
 
 // Agent check-in endpoint.
@@ -30,6 +34,30 @@ function toItemInput(item: InventoryItemPayload): RecordInventoryItemInput {
     contentHash: item.sha256 ?? null,
     riskSurface: item.risk_surface,
     resolvedAgainst: item.resolved_against ?? null,
+  };
+}
+
+function toFindingInput(finding: FindingPayload): RecordFindingInput {
+  return {
+    findingId: finding.finding_id,
+    ruleId: finding.rule_id,
+    // A finding with no fingerprint cannot be followed across reports; its own
+    // id is the next best stable handle.
+    fingerprint: finding.fingerprint ?? finding.finding_id,
+    severity: finding.severity,
+    category: finding.category ?? null,
+    layer: finding.layer ?? null,
+    filePath: finding.file_path ?? null,
+    contentHash: finding.sha256 ?? null,
+    line: finding.line ?? null,
+    column: finding.column ?? null,
+    description: finding.description,
+    evidence: finding.evidence ?? null,
+    owasp: finding.owasp,
+    cwe: finding.cwe ?? null,
+    confidence: finding.confidence ?? null,
+    fixable: finding.fixable ?? null,
+    suppressed: finding.suppressed ?? false,
   };
 }
 
@@ -83,12 +111,16 @@ export async function POST(request: Request) {
       kbVersion: payload.inventory.kb_version ?? null,
       toolsDetected: payload.inventory.tools,
       items: payload.inventory.items.map(toItemInput),
+      // Undefined stays undefined: an inventory-only report must not be read
+      // as "this machine is clean".
+      findings: payload.findings?.map(toFindingInput),
     });
 
     return Response.json({
       hostId,
       reportId,
       itemsAccepted: payload.inventory.items.length,
+      findingsAccepted: payload.findings?.length ?? null,
       // Reserved for the policy phase. Agents should apply what they find here
       // and treat an empty rule set as "no policy configured".
       policy: { version: null, rules: [] },
