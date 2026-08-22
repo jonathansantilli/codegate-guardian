@@ -71,6 +71,13 @@
       "when": 1787427420848,
       "tag": "0009_real_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787431619156,
+      "tag": "0010_sticky_slayback",
+      "breakpoints": true
     }
   ]
 }

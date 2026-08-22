@@ -1,7 +1,5 @@
-import {
-  extractBearerToken,
-  isValidAgentToken,
-} from "@/lib/security/agent-token";
+import { extractBearerToken } from "@/lib/security/agent-token";
+import { hashMachineToken } from "@/lib/security/machine-token";
 import {
   agentReportPayloadSchema,
   type FindingPayload,
@@ -67,7 +65,7 @@ function toFindingInput(finding: FindingPayload): RecordFindingInput {
  * rather than strings written at each call site.
  */
 export const REJECTION_NO_TOKEN = "401 no_token_configured";
-export const REJECTION_INVALID_TOKEN = "401 invalid_token";
+export const REJECTION_INVALID_TOKEN = "401 unknown_token";
 export const REJECTION_REVOKED = "403 enrolment_revoked";
 
 /** Longest hostname worth keeping from an unauthenticated caller. */
@@ -120,7 +118,15 @@ export async function POST(request: Request) {
   const container = getContainer();
 
   const token = extractBearerToken(request.headers.get("authorization"));
-  if (!isValidAgentToken(token, container.env.AGENT_INGEST_TOKEN)) {
+
+  // The token says which machine this is. Nothing in the body does — an agent
+  // that could name its own machine could name someone else's, and a report
+  // omitting their findings would mark them clean.
+  const reporting = token
+    ? await container.ports.fleet.findHostByTokenHash(hashMachineToken(token))
+    : null;
+
+  if (!reporting) {
     // A rejected check-in is the single most useful thing an operator can see
     // when nothing is arriving, so it is recorded rather than dropped: the
     // console can then say which machines tried and why they were turned away.
@@ -163,15 +169,13 @@ export async function POST(request: Request) {
 
   // A revoked machine keeps running and keeps reporting — the server cannot
   // tell it to stop. Closing the door here is the whole of what revocation
-  // means, so the refusal is recorded like any other rejected check-in.
-  const known = await container.ports.fleet.findHostByMachineId(
-    payload.agent.machineId
-  );
-  if (known?.revokedAt) {
+  // means, so the refusal is recorded like any other rejected check-in. The
+  // machine is the one the token belongs to, so renaming itself does not help.
+  if (reporting.revokedAt) {
     await container.ports.fleet.recordActivity({
       occurredAt: receivedAt,
       actorKind: "agent",
-      actorName: payload.host.hostname,
+      actorName: reporting.hostname,
       action: "Check-in rejected",
       target: null,
       result: REJECTION_REVOKED,
@@ -182,7 +186,8 @@ export async function POST(request: Request) {
 
   try {
     const { hostId, reportId } = await container.ports.fleet.recordReport({
-      machineId: payload.agent.machineId,
+      // Not payload.agent.machineId: identity comes from the credential.
+      machineId: reporting.machineId,
       hostname: payload.host.hostname,
       platform: payload.host.platform ?? null,
       osRelease: payload.host.osRelease ?? null,

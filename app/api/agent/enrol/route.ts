@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { normalizeEnrolmentCode } from "@/lib/security/enrolment-code";
+import {
+  hashMachineToken,
+  mintMachineToken,
+} from "@/lib/security/machine-token";
 import { getContainer } from "@/src/infrastructure";
 
 /**
@@ -9,6 +13,11 @@ import { getContainer } from "@/src/infrastructure";
  * being enrolled has nothing else to present. That is why codes are capped,
  * expiring, and spent atomically — a leaked code can enrol at most the number
  * of machines it was minted for, and only until it expires.
+ *
+ * The token returned belongs to this machine alone. It used to be the fleet's
+ * shared ingest token, which meant any agent could report as any machine — and
+ * since a finding closes by being absent from a later report, one hostile
+ * agent could mark the whole fleet clean.
  */
 
 const bodySchema = z.object({
@@ -27,8 +36,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const token = container.env.AGENT_INGEST_TOKEN;
-  if (!token) {
+  // The configured ingest token no longer authenticates reports; its presence
+  // is what says this server is accepting agents at all.
+  if (!container.env.AGENT_INGEST_TOKEN) {
     return Response.json(
       {
         error:
@@ -55,15 +65,25 @@ export async function POST(request: Request) {
     );
   }
 
+  const token = mintMachineToken();
+  const enrolledAt = new Date();
+
+  await container.ports.fleet.enrolHost({
+    machineId: parsed.data.machineId,
+    tokenHash: hashMachineToken(token),
+    enrolledAt,
+  });
+
   await container.ports.fleet.recordActivity({
-    occurredAt: new Date(),
+    occurredAt: enrolledAt,
     actorKind: "agent",
     actorName: parsed.data.machineId,
     action: "Enrolled",
     target: "enrolment code redeemed",
-    result: "Accepted",
+    result: "Issued its own reporting token",
     apiCall: "POST /api/agent/enrol",
   });
 
+  // The only time this token exists in plain text. The server keeps a hash.
   return Response.json({ token, server: container.env.APP_URL });
 }

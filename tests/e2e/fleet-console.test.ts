@@ -153,3 +153,106 @@ test.describe("Feature: the console is not open to anyone who can reach it", () 
     expect(response.status()).toBe(401);
   });
 });
+
+test.describe("Feature: a machine can only report as itself", () => {
+  /** Mints a code as the operator and enrols a machine with it. */
+  async function enrol(
+    page: import("@playwright/test").Page,
+    machineId: string
+  ) {
+    const code = await page.evaluate(async () => {
+      const response = await fetch("/api/fleet/enrolment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ maxUses: 1, label: "e2e-impersonation" }),
+      });
+      return (await response.json()).code as string;
+    });
+
+    return page.evaluate(
+      async ({ code: c, machineId: m }) => {
+        const response = await fetch("/api/agent/enrol", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ code: c, machineId: m }),
+        });
+        return (await response.json()).token as string;
+      },
+      { code, machineId }
+    );
+  }
+
+  function report(
+    page: import("@playwright/test").Page,
+    token: string,
+    machineId: string,
+    findings: unknown[]
+  ) {
+    return page.evaluate(
+      async ({ token: t, machineId: m, findings: f }) => {
+        const response = await fetch("/api/agent/report", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({
+            agent: { machineId: m, version: "1.1.0" },
+            host: { hostname: m, platform: "linux" },
+            collectedAt: new Date().toISOString(),
+            inventory: { tools: [{ name: "claude-code" }], items: [] },
+            findings: f,
+          }),
+        });
+        return response.status;
+      },
+      { token, machineId, findings }
+    );
+  }
+
+  test("one agent cannot resolve another machine's findings by claiming its id", async ({
+    page,
+  }) => {
+    await page.goto("/fleet");
+    const stamp = Date.now();
+    const victimId = `e2e-victim-${stamp}`;
+    const fingerprint = `fp-e2e-${stamp}`;
+
+    const victimToken = await enrol(page, victimId);
+    expect(victimToken.startsWith("cgm_")).toBe(true);
+
+    expect(
+      await report(page, victimToken, victimId, [
+        {
+          finding_id: fingerprint,
+          rule_id: "known-malicious-content",
+          fingerprint,
+          severity: "CRITICAL",
+          description: "Known-malicious skill installed",
+          owasp: [],
+        },
+      ])
+    ).toBe(200);
+
+    // A second machine, enrolled legitimately, claims to be the first.
+    const attackerToken = await enrol(page, `e2e-attacker-${stamp}`);
+    expect(attackerToken).not.toBe(victimToken);
+    expect(await report(page, attackerToken, victimId, [])).toBe(200);
+
+    // The victim's finding must survive: identity comes from the token.
+    const status = await page.evaluate(async (fp) => {
+      const response = await fetch("/api/fleet/findings");
+      const body = await response.json();
+      return body.findings.find(
+        (f: { fingerprint: string }) => f.fingerprint === fp
+      )?.status;
+    }, fingerprint);
+
+    expect(status).toBe("open");
+  });
+
+  test("an unknown token is refused", async ({ page }) => {
+    await page.goto("/fleet");
+    expect(await report(page, "cgm_not-a-real-token", "whoever", [])).toBe(401);
+  });
+});
