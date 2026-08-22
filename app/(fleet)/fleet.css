@@ -1,0 +1,899 @@
+/*
+ * The Guardian console stylesheet.
+ *
+ * Ported verbatim from the sealed design canvas (design/build.mjs) so the
+ * console cannot drift from it: the screens use these class names directly
+ * instead of re-deriving every size and colour in utility classes. Only three
+ * things changed — dark mode is the app's .dark class rather than a data
+ * attribute, the root fills the viewport rather than a 1440x1024 artboard, and
+ * the fonts come from the variables the root layout already defines.
+ *
+ * Everything under .gd is scoped to the console and cannot leak.
+ */
+
+.gd {
+  --bg: oklch(0.985 0 0);
+  --card: oklch(1 0 0);
+  --sidebar: oklch(0.97 0 0);
+  --fg: oklch(0.12 0 0);
+  --fg2: oklch(0.38 0 0);
+  --fg3: oklch(0.5 0 0);
+  --border: oklch(0.9 0 0);
+  --border2: oklch(0.88 0 0);
+  --muted: oklch(0.94 0 0);
+  --secondary: oklch(0.965 0 0);
+  --input30: oklch(0.9 0 0 / 0.3);
+  --destructive: oklch(0.55 0.15 25);
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.03);
+  --crit: #c1121f;
+  --high: #b45309;
+  --med: #92600a;
+  --low: #01639b;
+  --info: #52606d;
+  --crit-bg: #fef2f2;
+  --high-bg: #fff7ed;
+  --med-bg: #fffbeb;
+  --low-bg: #f0f9ff;
+  --info-bg: #f8fafc;
+  --ok: #047857;
+  --ok-bg: #ecfdf5;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+}
+.dark .gd {
+  --bg: oklch(0.195 0 0);
+  --card: oklch(0.225 0 0);
+  --sidebar: oklch(0.175 0 0);
+  --fg: oklch(0.94 0 0);
+  --fg2: oklch(0.75 0 0);
+  --fg3: oklch(0.68 0 0);
+  --border: oklch(0.27 0 0);
+  --border2: oklch(0.25 0 0);
+  --muted: oklch(0.165 0 0);
+  --secondary: oklch(0.26 0 0);
+  --input30: oklch(0.27 0 0 / 0.3);
+  --destructive: oklch(0.7 0.15 25);
+  --shadow-card:
+    inset 0 1px 0 oklch(1 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.2);
+  --crit: #f87171;
+  --high: #fb923c;
+  --med: #fbbf24;
+  --low: #38bdf8;
+  --info: #94a3b8;
+  --crit-bg: oklch(0.55 0.15 25 / 0.16);
+  --high-bg: oklch(0.6 0.14 50 / 0.16);
+  --med-bg: oklch(0.65 0.13 75 / 0.16);
+  --low-bg: oklch(0.6 0.12 235 / 0.16);
+  --info-bg: oklch(0.6 0 0 / 0.14);
+  --ok: #34d399;
+  --ok-bg: oklch(0.6 0.12 160 / 0.16);
+  --warn: #fbbf24;
+  --warn-bg: oklch(0.65 0.13 75 / 0.16);
+}
+
+.gd,
+.gd * {
+  box-sizing: border-box;
+}
+.gd {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "ss02", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+.gd h1,
+.gd h2,
+.gd h3,
+.gd h4 {
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin: 0;
+  font-weight: 600;
+}
+.gd p {
+  margin: 0;
+}
+.mono {
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gd a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.gd a:hover {
+  color: var(--fg2);
+}
+
+/* sidebar ------------------------------------------------------- */
+.side {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border2);
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border2);
+}
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--fg);
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav {
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nav-h {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg3);
+  padding: 14px 8px 6px;
+}
+.nav-i {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--fg2);
+  font-weight: 500;
+  font-size: 13.5px;
+}
+.nav-i.on {
+  background: var(--muted);
+  color: var(--fg);
+}
+.nav-i .ct {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg3);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+.nav-i.on .ct {
+  color: var(--fg2);
+}
+.nav-i .ct.crit {
+  color: var(--crit);
+}
+.side-f {
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg2);
+  flex-shrink: 0;
+}
+
+/* topbar -------------------------------------------------------- */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.top {
+  height: 56px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  background: var(--bg);
+}
+.top h1 {
+  font-size: 16px;
+}
+.crumb {
+  color: var(--fg3);
+  font-size: 13.5px;
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* controls ------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn.sm {
+  height: 32px;
+  padding: 0 12px;
+}
+.btn.xs {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
+.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+.btn-outline {
+  border-color: var(--border);
+  background: var(--input30);
+  color: var(--fg);
+}
+.btn-ghost {
+  color: var(--fg2);
+}
+.btn-danger {
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--fg3);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.b-sec {
+  background: var(--secondary);
+  color: var(--fg2);
+}
+.b-out {
+  border: 1px solid var(--border);
+  background: var(--input30);
+  color: var(--fg2);
+}
+.b-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.b-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.b-crit {
+  background: var(--crit-bg);
+  color: var(--crit);
+}
+
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* the signature element: every surface names the call behind it --- */
+.api {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--fg3);
+  white-space: nowrap;
+}
+.api b {
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+/* cards / tables ------------------------------------------------ */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.card-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.card-h h3 {
+  font-size: 13.5px;
+}
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tbl th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg3);
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 11px 16px;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+  vertical-align: middle;
+}
+.tbl tr:last-child td {
+  border-bottom: 0;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.r {
+  text-align: right;
+}
+.trunc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg3);
+  font-size: 13px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 13px;
+  color: var(--fg2);
+  font-weight: 500;
+}
+.chip.on {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kv .k {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg3);
+  font-weight: 500;
+}
+.kv .v {
+  font-size: 13.5px;
+  color: var(--fg);
+}
+
+.code {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--fg2);
+  overflow: hidden;
+  white-space: pre;
+}
+.code .cm {
+  color: var(--fg3);
+}
+.code .kw {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* file viewer -------------------------------------------------- */
+.cv {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  white-space: pre;
+}
+.cvl {
+  display: flex;
+  align-items: stretch;
+  min-height: 22px;
+}
+.cvn {
+  width: 46px;
+  flex-shrink: 0;
+  text-align: right;
+  padding: 2px 12px 0 0;
+  color: var(--fg3);
+  font-size: 11.5px;
+  line-height: 20px;
+}
+.cvg {
+  width: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+}
+.cvc {
+  flex: 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 2px 14px 0 8px;
+  color: var(--fg2);
+  line-height: 20px;
+}
+.cvl.flag {
+  background: var(--crit-bg);
+  box-shadow: inset 2px 0 0 var(--crit);
+}
+.cvl.flag .cvc {
+  color: var(--fg);
+}
+.cvl.flag .cvn {
+  color: var(--crit);
+}
+.cvl.warnflag {
+  background: var(--high-bg);
+  box-shadow: inset 2px 0 0 var(--high);
+}
+.cvl.warnflag .cvc {
+  color: var(--fg);
+}
+.cvl.warnflag .cvn {
+  color: var(--high);
+}
+.cvs {
+  color: var(--fg3);
+}
+.cvk {
+  color: var(--fg);
+  font-weight: 500;
+}
+.cvbad {
+  color: var(--crit);
+  font-weight: 500;
+}
+
+/* a zero-width character made visible */
+.zwc {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 4px;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: var(--high-bg);
+  color: var(--high);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  vertical-align: baseline;
+  position: relative;
+  top: -1px;
+}
+
+.tog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 12.5px;
+  color: var(--fg2);
+  font-weight: 500;
+}
+.tog .sw {
+  width: 26px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--muted);
+  position: relative;
+  flex-shrink: 0;
+}
+.tog.on {
+  border-color: var(--fg);
+}
+.tog.on .sw {
+  background: var(--fg);
+}
+.tog .sw i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--card);
+}
+.tog.on .sw i {
+  left: 13px;
+}
+
+/* finding lifecycle -------------------------------------------- */
+.lc {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  width: 100%;
+}
+.lc-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.lc-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.lc-node {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.lc-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+}
+.lc-step.done .lc-node {
+  background: var(--fg);
+  border-color: var(--fg);
+}
+.lc-step.done .lc-line {
+  background: var(--fg);
+}
+.lc-step.now .lc-node {
+  border-color: var(--fg);
+  background: var(--card);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--fg) 14%, transparent);
+}
+.lc-step.ok .lc-node {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.lc-step.ok .lc-line {
+  background: var(--ok);
+}
+.lc-step.wait .lc-line {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--border) 0 4px,
+    transparent 4px 8px
+  );
+}
+.lc-lab {
+  font-size: 12px;
+  font-weight: 500;
+}
+.lc-sub {
+  font-size: 11px;
+  color: var(--fg3);
+}
+.lc-step.todo .lc-lab {
+  color: var(--fg3);
+  font-weight: 400;
+}
+
+.sevbar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--muted);
+}
+.gd :focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* diff ---------------------------------------------------------- */
+.df {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+}
+.dfl {
+  display: flex;
+  align-items: stretch;
+  min-height: 21px;
+}
+.dfn {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: right;
+  padding: 1px 10px 0 0;
+  color: var(--fg3);
+  font-size: 11px;
+  line-height: 19px;
+}
+.dfs {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  line-height: 21px;
+  color: var(--fg3);
+  font-size: 11.5px;
+}
+.dfc {
+  flex: 1;
+  white-space: pre;
+  padding: 1px 14px 0 6px;
+  color: var(--fg2);
+  line-height: 19px;
+}
+.dfl.add {
+  background: var(--ok-bg);
+}
+.dfl.add .dfs,
+.dfl.add .dfc {
+  color: var(--ok);
+}
+.dfl.del {
+  background: var(--crit-bg);
+}
+.dfl.del .dfs,
+.dfl.del .dfc {
+  color: var(--crit);
+}
+.dfl.bad {
+  background: var(--ok-bg);
+  box-shadow: inset 3px 0 0 var(--crit);
+}
+.dfl.bad .dfs {
+  color: var(--ok);
+}
+.dfl.bad .dfc {
+  color: var(--ok);
+}
+
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 36px;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+  background: var(--muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Live-application additions.
+ *
+ * The canvas is a still image: every control is a div and nothing
+ * scrolls, hovers or takes focus. These rules give the same elements the
+ * behaviour a real console needs, without changing any size or colour
+ * the design fixed.
+ * ------------------------------------------------------------------ */
+
+/* Artboards are exactly one screen tall; real fleets are not. */
+.gd .body {
+  overflow-y: auto;
+}
+
+/* Controls are real buttons and links here, so reset the UA styling the
+ * canvas never had to deal with. */
+.gd button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+/* Bare buttons lose the UA chrome; a button already carrying a design class
+ * keeps the border, ground and padding that class gives it. */
+.gd
+button:not(.btn):not(.chip):not(.tog):not(.badge):not(.icon-btn):not(.input) {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.gd .btn,
+.gd .chip,
+.gd .icon-btn,
+.gd .tog {
+  cursor: pointer;
+}
+.gd .btn-primary:hover {
+  opacity: 0.9;
+}
+.gd .btn-outline:hover,
+.gd .chip:not(.on):hover,
+.gd .icon-btn:hover {
+  background: var(--muted);
+}
+.gd .btn-danger:hover {
+  background: color-mix(in oklch, var(--destructive) 16%, transparent);
+}
+.gd .btn[disabled],
+.gd button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Rows that lead somewhere have to look like it. */
+.gd .nav-i:hover:not(.on) {
+  background: color-mix(in oklch, var(--muted) 55%, transparent);
+  color: var(--fg);
+}
+.gd .tbl tbody tr.link:hover {
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+  cursor: pointer;
+}
+.gd .rowbtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.gd .rowbtn:hover {
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+}
+
+/* Text inputs replace the canvas's placeholder divs. */
+.gd input.input,
+.gd textarea.ta,
+.gd select.input {
+  width: 100%;
+  color: var(--fg);
+}
+.gd input.input::placeholder,
+.gd textarea.ta::placeholder {
+  color: var(--fg3);
+}
+.gd input.input:focus-visible,
+.gd textarea.ta:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+.gd textarea.ta {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 72px;
+}
+
+/* Sticky headers keep column names visible in long tables. */
+.gd .tbl thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+}
+
+/* Loading placeholder — a card that is waiting, not a card that is empty. */
+.gd .skel {
+  border-radius: 6px;
+  background: var(--muted);
+  animation: gd-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gd-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gd .skel {
+    animation: none;
+  }
+}
+
+/* A button that is a link is still a button: `.gd a` would otherwise repaint
+ * its text in the foreground colour and hide it against a filled ground.
+ * Order matters — the base comes first so each variant can override it. */
+.gd a.btn {
+  color: var(--fg);
+}
+.gd a.btn-primary,
+.gd a.btn-primary:hover {
+  color: var(--bg);
+}
+.gd a.btn-danger,
+.gd a.btn-danger:hover {
+  color: var(--destructive);
+}

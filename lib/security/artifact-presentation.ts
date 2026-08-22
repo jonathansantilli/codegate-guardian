@@ -47,3 +47,20 @@ export function fleetShare(machineCount: number, fleetSize: number): number {
 export function orderVariants<T extends VariantLike>(variants: T[]): T[] {
   return [...variants].sort((a, b) => b.machineCount - a.machineCount);
 }
+
+/**
+ * The URL form of a content hash.
+ *
+ * A hash is always `sha256:<hex>`, so the algorithm prefix carries nothing in
+ * a path segment — and its colon has to be percent-encoded, which routers
+ * then re-encode into a value that no longer matches anything. The digest
+ * alone is unambiguous and survives a round trip untouched.
+ */
+export function hashSlug(contentHash: string): string {
+  return contentHash.replace(/^sha256:/, "");
+}
+
+/** The stored form of a hash taken from a URL. Round-trips `hashSlug`. */
+export function hashFromSlug(slug: string): string {
+  return slug.startsWith("sha256:") ? slug : `sha256:${slug}`;
+}

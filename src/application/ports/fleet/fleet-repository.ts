@@ -111,6 +111,78 @@ export type HostDetail = {
   lastCollectedAt: Date | null;
   kbVersion: string | null;
   items: HostDetailItem[];
+  /** Findings the machine's most recent findings-bearing report carried. */
+  findings: HostFindingRow[];
+  /** Newest first. What the machine has sent, and how it changed. */
+  reports: HostReportSummary[];
+};
+
+/** One finding as it stands on a single machine. */
+export type HostFindingRow = {
+  fingerprint: string;
+  ruleId: string;
+  severity: string;
+  description: string;
+  filePath: string | null;
+  contentHash: string | null;
+  evidence: string | null;
+  line: number | null;
+  column: number | null;
+};
+
+export type HostReportSummary = {
+  id: string;
+  collectedAt: Date;
+  receivedAt: Date;
+  itemsTotal: number;
+  findingsReported: boolean;
+  findingsTotal: number;
+  criticalTotal: number;
+};
+
+/**
+ * One row of "act on these first": a machine, the person accountable for it,
+ * and the reason — in that order, because an operator acts on a person's
+ * laptop and not on an abstract rule.
+ */
+export type AttentionRow = {
+  hostId: string;
+  hostname: string;
+  owner: string | null;
+  team: string | null;
+  fingerprint: string;
+  ruleId: string;
+  severity: string;
+  description: string;
+  filePath: string | null;
+  lastSeenAt: Date;
+};
+
+/** The numbers the overview leads with, counted server-side. */
+export type FleetOverview = {
+  hostsEnrolled: number;
+  hostsReporting: number;
+  ownersWithOpenFindings: number;
+  teamsWithOpenFindings: number;
+  openFindings: number;
+  untriagedFindings: number;
+  /** Reports received per hour over the last 24, oldest first. */
+  checkInsPerHour: { hour: Date; count: number }[];
+  /** When the newest accepted report arrived, or null if none ever has. */
+  lastCheckInAt: Date | null;
+  /** Reports rejected in the last hour, and why. Empty when ingest is healthy. */
+  rejections: {
+    hostname: string;
+    owner: string | null;
+    reason: string;
+    at: Date;
+  }[];
+  /**
+   * The newest content-feed version any machine reported running, and how old
+   * it is. Detection still runs against an old feed — it just runs against
+   * older indicators, which is worth saying out loud.
+   */
+  contentFeed: { version: string | null; ageDays: number | null };
 };
 
 export type HostDetailItem = {
@@ -133,6 +205,29 @@ export type ArtifactVariant = {
 };
 
 /** Artifacts sharing a name, split into their distinct variants. */
+/**
+ * One content hash, everywhere it appears.
+ *
+ * The siblings are the other variants sharing this artifact's name — what
+ * makes a variant interesting is usually the one it is being confused with.
+ */
+export type ArtifactVariantDetail = {
+  contentHash: string;
+  name: string;
+  tool: string;
+  kind: InventoryItemKind;
+  firstSeenAt: Date;
+  machines: {
+    hostId: string;
+    hostname: string;
+    owner: string | null;
+    team: string | null;
+    path: string;
+    lastSeenAt: Date;
+  }[];
+  siblings: ArtifactVariant[];
+};
+
 export type ArtifactGroup = {
   name: string;
   tool: string;
@@ -238,8 +333,16 @@ export type FleetRepository = {
   recordReport(input: RecordHostReportInput): Promise<RecordedReport>;
   listHostSummaries(): Promise<HostSummary[]>;
   findHostDetail(hostId: string): Promise<HostDetail | null>;
+  /** Machines and people needing attention, worst first. */
+  listAttention(limit?: number): Promise<AttentionRow[]>;
+  /** The overview's headline numbers in one round trip. */
+  overview(now: Date): Promise<FleetOverview>;
   /** Fleet-wide artifacts, grouped by content hash — never by name. */
   listArtifactGroups(): Promise<ArtifactGroup[]>;
+  /** One artifact variant: which machines carry this exact file. */
+  findArtifactVariant(
+    contentHash: string
+  ): Promise<ArtifactVariantDetail | null>;
   /** Findings across the fleet, with status derived from report history. */
   listFindings(): Promise<FleetFinding[]>;
   /** Records that a person has taken responsibility for a finding. */

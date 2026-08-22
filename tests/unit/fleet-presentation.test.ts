@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  displayPath,
   formatRelativeTime,
   getHostFreshness,
 } from "@/lib/security/fleet-presentation";
@@ -45,5 +46,52 @@ describe("formatRelativeTime", () => {
     );
     assert.equal(formatRelativeTime(hoursAgo(3), NOW), "3h ago");
     assert.equal(formatRelativeTime(hoursAgo(50), NOW), "2d ago");
+  });
+});
+
+describe("displayPath", () => {
+  test("keeps the tail, which is the part that identifies the file", () => {
+    assert.equal(
+      displayPath(
+        "/private/tmp/build-1234/work/.claude/skills/podcast/SKILL.md"
+      ),
+      "…/skills/podcast/SKILL.md"
+    );
+  });
+
+  test("leaves a short path alone", () => {
+    assert.equal(displayPath("/etc/hosts"), "/etc/hosts");
+  });
+
+  test("collapses the owner's home directory the way the machine shows it", () => {
+    assert.equal(
+      displayPath("/Users/jonathan/.claude/settings.json", {
+        username: "jonathan",
+      }),
+      "~/.claude/settings.json"
+    );
+  });
+
+  test("collapses a linux home directory too", () => {
+    assert.equal(
+      displayPath("/home/priya/.claude/CLAUDE.md", { username: "priya" }),
+      "~/.claude/CLAUDE.md"
+    );
+  });
+
+  test("does not collapse another user's home directory", () => {
+    assert.equal(
+      displayPath("/Users/someone-else/.claude/settings.json", {
+        username: "jonathan",
+      }),
+      "…/someone-else/.claude/settings.json"
+    );
+  });
+
+  test("does not treat a username as a regular expression", () => {
+    assert.equal(
+      displayPath("/Users/a.b/.claude/x.json", { username: "a.b" }),
+      "~/.claude/x.json"
+    );
   });
 });

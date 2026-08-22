@@ -2,6 +2,8 @@ import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   fleetShare,
+  hashFromSlug,
+  hashSlug,
   hasMultipleVariants,
   orderVariants,
   shortHash,
@@ -83,5 +85,26 @@ describe("orderVariants", () => {
     ];
     orderVariants(input);
     assert.equal(input[0].contentHash, "sha256:a");
+  });
+});
+
+describe("content hash URLs", () => {
+  test("drops the algorithm prefix so a path segment needs no escaping", () => {
+    assert.equal(hashSlug("sha256:abc123"), "abc123");
+    assert.ok(!hashSlug("sha256:abc123").includes(":"));
+  });
+
+  test("restores the stored form from a slug", () => {
+    assert.equal(hashFromSlug("abc123"), "sha256:abc123");
+  });
+
+  test("round-trips any stored hash", () => {
+    const stored =
+      "sha256:891c8c188060c517891c1d5b2e564edc898fd7b8097ec70cbb2da0bafca6a5b3";
+    assert.equal(hashFromSlug(hashSlug(stored)), stored);
+  });
+
+  test("leaves an already-prefixed slug alone rather than doubling it", () => {
+    assert.equal(hashFromSlug("sha256:abc123"), "sha256:abc123");
   });
 });

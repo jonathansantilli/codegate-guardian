@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import type { FindingStatus } from "@/src/application/ports/fleet/fleet-repository";
 
 /**
@@ -31,48 +30,39 @@ export function stepIndexFor(status: FindingStatus): number {
   }
 }
 
+/** Where the wait is: the leg after this step is drawn dashed, not solid. */
+const WAITING_STEP = 2;
+
 export function LifecycleTrack({ status }: { status: FindingStatus }) {
   const at = stepIndexFor(status);
   const done = status === "resolved";
 
   return (
-    <ol className="flex w-full items-start gap-0">
-      {STEPS.map((step, index) => (
-        <li className="flex min-w-0 flex-1 flex-col gap-1.5" key={step.key}>
-          <div className="flex items-center">
-            <span
-              className={cn(
-                "size-3 shrink-0 rounded-full border-2",
-                index < at || done
-                  ? "border-foreground bg-foreground"
-                  : index === at
-                    ? "border-foreground bg-background ring-2 ring-foreground/15"
-                    : "border-border bg-background"
-              )}
-            />
-            {index < STEPS.length - 1 && (
-              <span
-                className={cn(
-                  "h-0.5 flex-1",
-                  index < at || done
-                    ? "bg-foreground"
-                    : "bg-[repeating-linear-gradient(90deg,var(--color-border)_0_4px,transparent_4px_8px)]"
-                )}
-              />
-            )}
-          </div>
-          <span
-            className={cn(
-              "pr-2 text-xs",
-              index <= at || done
-                ? "font-medium text-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            {step.label}
-          </span>
-        </li>
-      ))}
+    <ol className="lc">
+      {STEPS.map((step, index) => {
+        const reached = index < at || done;
+        const now = index === at && !done;
+        const state =
+          done && index === STEPS.length - 1
+            ? "ok"
+            : reached
+              ? "done"
+              : now
+                ? "now"
+                : index === WAITING_STEP
+                  ? "wait todo"
+                  : "todo";
+
+        return (
+          <li className={`lc-step ${state}`} key={step.key}>
+            <div className="lc-track">
+              <span className="lc-node" />
+              {index < STEPS.length - 1 && <span className="lc-line" />}
+            </div>
+            <span className="lc-lab">{step.label}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

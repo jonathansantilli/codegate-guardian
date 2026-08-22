@@ -11,11 +11,17 @@ import {
 import type {
   ActivityRecord,
   ArtifactGroup,
+  ArtifactVariant,
+  ArtifactVariantDetail,
+  AttentionRow,
   EnrolmentCodeSummary,
   FindingStatus,
   FleetFinding,
+  FleetOverview,
   FleetRepository,
   HostDetail,
+  HostFindingRow,
+  HostReportSummary,
   HostSummary,
   MintEnrolmentCodeInput,
   PolicyRecord,
@@ -59,6 +65,90 @@ const SEVERITY_ORDER: Record<string, number> = {
   LOW: 3,
   INFO: 4,
 };
+
+/** Worst first. An unknown severity sorts last rather than first. */
+function severityRank(severity: string): number {
+  return SEVERITY_ORDER[severity.toUpperCase()] ?? Number.MAX_SAFE_INTEGER;
+}
+
+/** Reports kept on a machine's history panel. */
+const REPORT_HISTORY_LIMIT = 20;
+
+/** Rows the attention queue returns before the caller asks for more. */
+const ATTENTION_LIMIT = 50;
+
+/** Rejected check-ins listed on the overview. */
+const REJECTION_LIMIT = 20;
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/** How far back the overview's check-in chart reaches. */
+const CHECK_IN_WINDOW_HOURS = 24;
+
+/**
+ * A machine counts as reporting if it has been heard from inside this window.
+ * The agent reports every six hours, so a full day of silence is a machine
+ * that has stopped, not one that is merely between reports.
+ */
+const REPORTING_WINDOW_MS = 24 * HOUR_MS;
+
+/** Written by the ingest endpoint when a check-in is turned away. */
+const CHECK_IN_REJECTED = "Check-in rejected";
+
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * How old the content feed is, read from the version string the agents report.
+ *
+ * Feed versions are dated — 2026.08.20.1 — so the version is also the release
+ * date. A string that does not parse yields a null age rather than a wrong
+ * one: better to say nothing than to claim a feed is current.
+ */
+function contentFeedAge(
+  version: string | null,
+  now: Date
+): { version: string | null; ageDays: number | null } {
+  if (!version) {
+    return { version: null, ageDays: null };
+  }
+
+  const dated = version.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (!dated) {
+    return { version, ageDays: null };
+  }
+
+  const released = Date.UTC(
+    Number(dated[1]),
+    Number(dated[2]) - 1,
+    Number(dated[3])
+  );
+  return {
+    version,
+    ageDays: Math.max(0, Math.floor((now.getTime() - released) / DAY_MS)),
+  };
+}
+
+/**
+ * Whether a live suppression covers this finding.
+ *
+ * A null field on a suppression means "any": a fleet-wide suppression has no
+ * host, and a rule-wide one has no fingerprint.
+ */
+function isSuppressedBy(
+  live: {
+    fingerprint: string | null;
+    ruleId: string | null;
+    hostId: string | null;
+  }[],
+  row: { fingerprint: string; ruleId: string; hostId: string }
+): boolean {
+  return live.some(
+    (sup) =>
+      (sup.fingerprint === null || sup.fingerprint === row.fingerprint) &&
+      (sup.ruleId === null || sup.ruleId === row.ruleId) &&
+      (sup.hostId === null || sup.hostId === row.hostId)
+  );
+}
 
 /**
  * A finding still present in a machine's latest report is open (or
@@ -322,6 +412,8 @@ export class DrizzleFleetRepository implements FleetRepository {
         lastCollectedAt: null,
         kbVersion: null,
         items: [],
+        findings: [],
+        reports: [],
       };
     }
 
@@ -345,7 +437,258 @@ export class DrizzleFleetRepository implements FleetRepository {
         contentHash: item.contentHash,
         riskSurface: toStringArray(item.riskSurface),
       })),
+      findings: await this.findingsOnHost(hostId),
+      reports: await this.reportHistory(hostId),
     };
+  }
+
+  /**
+   * The findings the machine's newest findings-bearing report carried.
+   *
+   * Deliberately not the newest report: an inventory-only check-in asserts
+   * nothing about findings, and reading it as "clean" would empty this list
+   * every time the agent ran without a scan.
+   */
+  private async findingsOnHost(hostId: string): Promise<HostFindingRow[]> {
+    const [withFindings] = await this.db
+      .select({ id: hostReport.id })
+      .from(hostReport)
+      .where(
+        and(
+          eq(hostReport.hostId, hostId),
+          eq(hostReport.findingsReported, true)
+        )
+      )
+      .orderBy(desc(hostReport.receivedAt))
+      .limit(1);
+
+    if (!withFindings) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select({
+        fingerprint: hostFinding.fingerprint,
+        ruleId: hostFinding.ruleId,
+        severity: hostFinding.severity,
+        description: hostFinding.description,
+        filePath: hostFinding.filePath,
+        contentHash: hostFinding.contentHash,
+        evidence: hostFinding.evidence,
+        line: hostFinding.line,
+        column: hostFinding.column,
+      })
+      .from(hostFinding)
+      .where(
+        and(
+          eq(hostFinding.reportId, withFindings.id),
+          eq(hostFinding.suppressed, false)
+        )
+      );
+
+    return rows.sort(
+      (a, b) => severityRank(a.severity) - severityRank(b.severity)
+    );
+  }
+
+  /** What the machine has sent, newest first, with what each report carried. */
+  private async reportHistory(
+    hostId: string,
+    limit = REPORT_HISTORY_LIMIT
+  ): Promise<HostReportSummary[]> {
+    const reports = await this.db
+      .select({
+        id: hostReport.id,
+        collectedAt: hostReport.collectedAt,
+        receivedAt: hostReport.receivedAt,
+        itemsTotal: hostReport.itemsTotal,
+        findingsReported: hostReport.findingsReported,
+      })
+      .from(hostReport)
+      .where(eq(hostReport.hostId, hostId))
+      .orderBy(desc(hostReport.receivedAt))
+      .limit(limit);
+
+    if (reports.length === 0) {
+      return [];
+    }
+
+    const counts = await this.db
+      .select({
+        reportId: hostFinding.reportId,
+        total: sql<number>`count(*)::int`,
+        critical: sql<number>`count(*) filter (where ${hostFinding.severity} = 'CRITICAL')::int`,
+      })
+      .from(hostFinding)
+      .where(
+        inArray(
+          hostFinding.reportId,
+          reports.map((r) => r.id)
+        )
+      )
+      .groupBy(hostFinding.reportId);
+
+    const byReport = new Map(counts.map((c) => [c.reportId, c]));
+
+    return reports.map((report) => ({
+      ...report,
+      findingsTotal: byReport.get(report.id)?.total ?? 0,
+      criticalTotal: byReport.get(report.id)?.critical ?? 0,
+    }));
+  }
+
+  /**
+   * Machines and the people accountable for them, worst first.
+   *
+   * One row per finding per machine rather than one per finding: two laptops
+   * carrying the same malicious skill are two conversations with two people,
+   * and collapsing them hides the second.
+   */
+  async listAttention(limit = ATTENTION_LIMIT): Promise<AttentionRow[]> {
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], {
+        id: hostReport.id,
+        hostId: hostReport.hostId,
+        collectedAt: hostReport.collectedAt,
+      })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true))
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
+    const rows = await this.db
+      .select({
+        hostId: host.id,
+        hostname: host.hostname,
+        owner: host.owner,
+        team: host.team,
+        fingerprint: hostFinding.fingerprint,
+        ruleId: hostFinding.ruleId,
+        severity: hostFinding.severity,
+        description: hostFinding.description,
+        filePath: hostFinding.filePath,
+        lastSeenAt: latest.collectedAt,
+      })
+      .from(hostFinding)
+      .innerJoin(latest, eq(hostFinding.reportId, latest.id))
+      .innerJoin(host, eq(hostFinding.hostId, host.id))
+      .where(eq(hostFinding.suppressed, false));
+
+    const live = await this.liveSuppressions();
+    const visible = rows.filter((row) => !isSuppressedBy(live, row));
+
+    return visible
+      .sort(
+        (a, b) =>
+          severityRank(a.severity) - severityRank(b.severity) ||
+          b.lastSeenAt.getTime() - a.lastSeenAt.getTime()
+      )
+      .slice(0, limit);
+  }
+
+  /** Suppressions that are actually in force right now. */
+  private async liveSuppressions() {
+    const rows = await this.db
+      .select()
+      .from(findingSuppression)
+      .where(isNull(findingSuppression.revokedAt));
+
+    const now = new Date();
+    return rows.filter((sup) => sup.expiresAt === null || sup.expiresAt > now);
+  }
+
+  /**
+   * The overview's headline numbers.
+   *
+   * Counted here rather than in the browser so the page states one set of
+   * numbers, and so a fleet of thousands does not have to be shipped to a
+   * laptop to be counted.
+   */
+  async overview(now: Date): Promise<FleetOverview> {
+    const hosts = await this.db.select().from(host);
+    const attention = await this.listAttention(Number.MAX_SAFE_INTEGER);
+
+    const reportingSince = new Date(now.getTime() - REPORTING_WINDOW_MS);
+    const dayStart = new Date(now.getTime() - CHECK_IN_WINDOW_HOURS * HOUR_MS);
+
+    const perHour = await this.db
+      .select({
+        hour: sql<Date>`date_trunc('hour', ${hostReport.receivedAt})`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(hostReport)
+      .where(gt(hostReport.receivedAt, dayStart))
+      .groupBy(sql`date_trunc('hour', ${hostReport.receivedAt})`)
+      .orderBy(sql`date_trunc('hour', ${hostReport.receivedAt})`);
+
+    const rejections = await this.db
+      .select({
+        hostname: activityEvent.actorName,
+        reason: activityEvent.result,
+        at: activityEvent.occurredAt,
+      })
+      .from(activityEvent)
+      .where(
+        and(
+          eq(activityEvent.action, CHECK_IN_REJECTED),
+          gt(activityEvent.occurredAt, new Date(now.getTime() - HOUR_MS))
+        )
+      )
+      .orderBy(desc(activityEvent.occurredAt))
+      .limit(REJECTION_LIMIT);
+
+    const ownerByHostname = new Map(hosts.map((h) => [h.hostname, h.owner]));
+    const acknowledged = await this.acknowledgedFingerprints();
+
+    const [newest] = await this.db
+      .select({ kbVersion: hostReport.kbVersion })
+      .from(hostReport)
+      .where(isNotNull(hostReport.kbVersion))
+      .orderBy(desc(hostReport.receivedAt))
+      .limit(1);
+    const newestKbVersion = newest?.kbVersion ?? null;
+
+    const [newestReport] = await this.db
+      .select({ receivedAt: hostReport.receivedAt })
+      .from(hostReport)
+      .orderBy(desc(hostReport.receivedAt))
+      .limit(1);
+
+    return {
+      hostsEnrolled: hosts.length,
+      hostsReporting: hosts.filter((h) => h.lastSeenAt > reportingSince).length,
+      ownersWithOpenFindings: new Set(
+        attention.map((row) => row.owner ?? row.hostname)
+      ).size,
+      teamsWithOpenFindings: new Set(
+        attention.map((row) => row.team ?? "Unassigned")
+      ).size,
+      openFindings: attention.length,
+      untriagedFindings: attention.filter(
+        (row) => !acknowledged.has(row.fingerprint)
+      ).length,
+      checkInsPerHour: perHour.map((row) => ({
+        hour: new Date(row.hour),
+        count: row.count,
+      })),
+      // The hour buckets above are for the chart; "last check-in" has to be
+      // the real arrival time, not the start of the hour it landed in.
+      lastCheckInAt: newestReport?.receivedAt ?? null,
+      rejections: rejections.map((row) => ({
+        hostname: row.hostname,
+        owner: ownerByHostname.get(row.hostname) ?? null,
+        reason: row.reason,
+        at: row.at,
+      })),
+      contentFeed: contentFeedAge(newestKbVersion, now),
+    };
+  }
+
+  private async acknowledgedFingerprints(): Promise<Set<string>> {
+    const rows = await this.db
+      .select({ fingerprint: findingAcknowledgement.fingerprint })
+      .from(findingAcknowledgement);
+    return new Set(rows.map((row) => row.fingerprint));
   }
   /**
    * Fleet-wide artifacts keyed by content hash.
@@ -355,6 +698,102 @@ export class DrizzleFleetRepository implements FleetRepository {
    * yesterday must not still appear today. Items with no hash (absent files,
    * or an agent predating hashing) are excluded: they cannot be identified.
    */
+  /**
+   * One content hash and every machine carrying it.
+   *
+   * Only each machine's latest report counts: a file deleted yesterday is not
+   * something anyone still carries, and listing it would send an operator to
+   * a laptop that has already been fixed.
+   */
+  async findArtifactVariant(
+    contentHash: string
+  ): Promise<ArtifactVariantDetail | null> {
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], { id: hostReport.id })
+      .from(hostReport)
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
+    const rows = await this.db
+      .select({
+        hostId: host.id,
+        hostname: host.hostname,
+        owner: host.owner,
+        team: host.team,
+        lastSeenAt: host.lastSeenAt,
+        path: hostInventoryItem.path,
+        tool: hostInventoryItem.tool,
+        kind: hostInventoryItem.kind,
+        collectedAt: hostReport.collectedAt,
+      })
+      .from(hostInventoryItem)
+      .innerJoin(latest, eq(hostInventoryItem.reportId, latest.id))
+      .innerJoin(hostReport, eq(hostInventoryItem.reportId, hostReport.id))
+      .innerJoin(host, eq(hostInventoryItem.hostId, host.id))
+      .where(
+        and(
+          eq(hostInventoryItem.contentHash, contentHash),
+          eq(hostInventoryItem.exists, true)
+        )
+      );
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const name = rows[0].path.split("/").pop() || rows[0].path;
+
+    // Every other distinct file sharing this name — the variant next to it is
+    // usually the one it is being mistaken for.
+    const siblingRows = await this.db
+      .select({
+        contentHash: hostInventoryItem.contentHash,
+        path: hostInventoryItem.path,
+        machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
+        firstSeenAt: sql<Date>`min(${hostReport.collectedAt})`,
+      })
+      .from(hostInventoryItem)
+      .innerJoin(latest, eq(hostInventoryItem.reportId, latest.id))
+      .innerJoin(hostReport, eq(hostInventoryItem.reportId, hostReport.id))
+      .where(
+        and(
+          eq(hostInventoryItem.tool, rows[0].tool),
+          eq(hostInventoryItem.exists, true),
+          isNotNull(hostInventoryItem.contentHash),
+          sql`regexp_replace(${hostInventoryItem.path}, '^.*/', '') = ${name}`
+        )
+      )
+      .groupBy(hostInventoryItem.contentHash, hostInventoryItem.path);
+
+    const siblings: ArtifactVariant[] = siblingRows
+      .filter((row) => row.contentHash !== contentHash)
+      .map((row) => ({
+        contentHash: row.contentHash as string,
+        machineCount: row.machineCount,
+        firstSeenAt: new Date(row.firstSeenAt),
+        paths: [row.path],
+      }));
+
+    return {
+      contentHash,
+      name,
+      tool: rows[0].tool,
+      kind: rows[0].kind as InventoryItemKind,
+      firstSeenAt: new Date(
+        Math.min(...rows.map((row) => row.collectedAt.getTime()))
+      ),
+      machines: rows.map((row) => ({
+        hostId: row.hostId,
+        hostname: row.hostname,
+        owner: row.owner,
+        team: row.team,
+        path: row.path,
+        lastSeenAt: row.lastSeenAt,
+      })),
+      siblings,
+    };
+  }
+
   async listArtifactGroups(): Promise<ArtifactGroup[]> {
     const latest = this.db
       .selectDistinctOn([hostReport.hostId], {
@@ -506,17 +945,6 @@ export class DrizzleFleetRepository implements FleetRepository {
     const live = suppressions.filter(
       (sup) => sup.expiresAt === null || sup.expiresAt > now
     );
-    const isSuppressed = (row: {
-      fingerprint: string;
-      ruleId: string;
-      hostId: string;
-    }) =>
-      live.some(
-        (sup) =>
-          (sup.fingerprint === null || sup.fingerprint === row.fingerprint) &&
-          (sup.ruleId === null || sup.ruleId === row.ruleId) &&
-          (sup.hostId === null || sup.hostId === row.hostId)
-      );
 
     // The ordered sequence of findings-carrying reports per machine. A finding
     // that is present, then absent, then present again has regressed — and
@@ -550,7 +978,7 @@ export class DrizzleFleetRepository implements FleetRepository {
     const byFingerprint = new Map<string, Accumulator>();
 
     for (const row of rows) {
-      if (isSuppressed(row)) {
+      if (isSuppressedBy(live, row)) {
         continue;
       }
       const entry = byFingerprint.get(row.fingerprint) ?? {
