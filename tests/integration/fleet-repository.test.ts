@@ -542,6 +542,88 @@ describe("Feature: finding lifecycle (Drizzle-Postgres)", () => {
     const [found] = await repository.listFindings();
     assert.equal(found.contentHash, `sha256:${"b".repeat(64)}`);
   });
+  // A finding that was fixed and came back is not the same as one that was
+  // never fixed — the operator needs to know the fix did not hold.
+  it("Given a finding is fixed and then returns, when listing, then it is regressed", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    await repository.recordReport(
+      report({ findings: [], receivedAt: new Date("2026-08-22T18:00:00Z") })
+    );
+    await repository.recordReport(
+      report({
+        findings: [finding()],
+        receivedAt: new Date("2026-08-23T00:00:00Z"),
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "regressed");
+    assert.equal(found.machineCount, 1);
+  });
+
+  it("Given a finding reported twice running, when listing, then it is merely open", async () => {
+    await repository.recordReport(report({ findings: [finding()] }));
+    await repository.recordReport(
+      report({
+        findings: [finding()],
+        receivedAt: new Date("2026-08-22T18:00:00Z"),
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "open");
+  });
+
+  it("Given a regression, when it is acknowledged, then it still reads as regressed", async () => {
+    const { hostId } = await repository.recordReport(
+      report({ findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ findings: [], receivedAt: new Date("2026-08-22T18:00:00Z") })
+    );
+    await repository.recordReport(
+      report({
+        findings: [finding()],
+        receivedAt: new Date("2026-08-23T00:00:00Z"),
+      })
+    );
+    await repository.acknowledgeFinding({
+      hostId,
+      fingerprint: "sha256:fingerprint-1",
+      acknowledgedBy: "Jonathan Santilli",
+      acknowledgedAt: new Date("2026-08-23T01:00:00Z"),
+    });
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "regressed");
+  });
+
+  it("Given a regression on one machine only, when listing, then the whole finding shows it", async () => {
+    await repository.recordReport(
+      report({ machineId: "m-a", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({ machineId: "m-b", findings: [finding()] })
+    );
+    await repository.recordReport(
+      report({
+        machineId: "m-a",
+        findings: [],
+        receivedAt: new Date("2026-08-22T18:00:00Z"),
+      })
+    );
+    await repository.recordReport(
+      report({
+        machineId: "m-a",
+        findings: [finding()],
+        receivedAt: new Date("2026-08-23T00:00:00Z"),
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.status, "regressed");
+    assert.equal(found.machineCount, 2);
+  });
 });
 
 describe("Feature: suppression, ownership and enrolment (Drizzle-Postgres)", () => {

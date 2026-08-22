@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { fetcher } from "@/lib/utils";
@@ -65,19 +66,156 @@ function PanelHeading({ title, note }: { title: string; note: string }) {
   );
 }
 
+const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] as const;
+
+type PolicyDraft = {
+  id?: string;
+  name: string;
+  ruleId: string;
+  severity: string;
+  enabled: boolean;
+};
+
+const EMPTY_DRAFT: PolicyDraft = {
+  name: "",
+  ruleId: "",
+  severity: "HIGH",
+  enabled: true,
+};
+
 export function PoliciesPanel() {
-  const { data } = useSWR<{ policies: Policy[] }>(
+  const { data, mutate } = useSWR<{ policies: Policy[] }>(
     `${base}/api/fleet/policies`,
     fetcher
   );
   const policies = data?.policies ?? [];
+  const [draft, setDraft] = useState<PolicyDraft | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!draft) {
+      return;
+    }
+    const response = await fetch(`${base}/api/fleet/policies`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "That policy could not be saved.");
+      return;
+    }
+
+    setError(null);
+    setDraft(null);
+    mutate();
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border border-border/50">
-      <PanelHeading
-        note="Evaluated here, against the latest report from each machine — never sent to one"
-        title="Policies"
-      />
+      <div className="flex flex-wrap items-center gap-2.5 border-border/50 border-b bg-muted/30 px-4 py-2.5">
+        <h2 className="font-medium text-sm">Policies</h2>
+        <span className="text-muted-foreground text-xs">
+          Evaluated here, against the latest report from each machine — never
+          sent to one
+        </span>
+        <button
+          className="ml-auto h-7 rounded-lg bg-foreground px-3 font-medium text-background text-xs"
+          onClick={() => setDraft({ ...EMPTY_DRAFT })}
+          type="button"
+        >
+          New policy
+        </button>
+      </div>
+
+      {draft && (
+        <div className="flex flex-col gap-3 border-border/50 border-b bg-muted/20 px-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-muted-foreground text-xs">
+                Name
+              </span>
+              <input
+                className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                placeholder="Flag credential redirects"
+                value={draft.name}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-muted-foreground text-xs">
+                Rule id a report must carry to violate it
+              </span>
+              <input
+                className="h-9 rounded-lg border border-border bg-background px-3 font-mono text-sm"
+                onChange={(e) => setDraft({ ...draft, ruleId: e.target.value })}
+                placeholder="env-base-url-override"
+                value={draft.ruleId}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-muted-foreground text-xs">
+                Report a violation as
+              </span>
+              <select
+                className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+                onChange={(e) =>
+                  setDraft({ ...draft, severity: e.target.value })
+                }
+                value={draft.severity}
+              >
+                {SEVERITIES.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {severity}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 self-end pb-2">
+              <input
+                checked={draft.enabled}
+                className="size-4"
+                onChange={(e) =>
+                  setDraft({ ...draft, enabled: e.target.checked })
+                }
+                type="checkbox"
+              />
+              <span className="text-sm">Evaluate this policy</span>
+            </label>
+          </div>
+
+          <p className="text-muted-foreground text-xs">
+            Saving records the rule here. It never reaches a machine and cannot
+            block anything on one — a violation is reported, and the fix happens
+            on the machine.
+          </p>
+
+          {error && <p className="text-destructive text-xs">{error}</p>}
+
+          <div className="flex items-center gap-2">
+            <button
+              className="h-8 rounded-lg bg-foreground px-3 font-medium text-background text-sm disabled:opacity-50"
+              disabled={!(draft.name.trim() && draft.ruleId.trim())}
+              onClick={save}
+              type="button"
+            >
+              {draft.id ? "Save changes" : "Create policy"}
+            </button>
+            <button
+              className="h-8 rounded-lg border border-border px-3 font-medium text-sm"
+              onClick={() => {
+                setDraft(null);
+                setError(null);
+              }}
+              type="button"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
       {policies.length === 0 && (
         <p className="px-4 py-6 text-center text-muted-foreground text-sm">
           No policies yet. A policy is a rule this server checks each report
@@ -106,6 +244,21 @@ export function PoliciesPanel() {
             <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
               {policy.violatingMachines} of {policy.evaluatedMachines} failing
             </span>
+            <button
+              className="h-7 shrink-0 rounded-lg border border-border px-2.5 font-medium text-xs"
+              onClick={() =>
+                setDraft({
+                  id: policy.id,
+                  name: policy.name,
+                  ruleId: policy.ruleId,
+                  severity: policy.severity,
+                  enabled: policy.enabled,
+                })
+              }
+              type="button"
+            >
+              Edit
+            </button>
           </li>
         ))}
       </ul>

@@ -66,12 +66,44 @@ const SEVERITY_ORDER: Record<string, number> = {
  * the newer report is the evidence. Regression is detected on ingest, when a
  * fingerprint reappears after resolving.
  */
+/**
+ * Whether a finding disappeared and came back on any machine.
+ *
+ * Looks for a report between the finding's first appearance and its last that
+ * did not carry it. A finding merely reported twice in a row has no gap; one
+ * that was fixed and returned does.
+ */
+function hasGap(
+  carriedByHost: Map<string, Set<string>>,
+  allReportsByHost: Map<string, string[]>
+): boolean {
+  for (const [hostId, carried] of carriedByHost) {
+    const sequence = allReportsByHost.get(hostId) ?? [];
+    const first = sequence.findIndex((id) => carried.has(id));
+    const last = sequence.findLastIndex((id) => carried.has(id));
+    if (first === -1 || last <= first) {
+      continue;
+    }
+    for (let i = first + 1; i < last; i++) {
+      if (!carried.has(sequence[i])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function resolveStatus(
   finding: { acknowledgedAt: Date | null },
-  openHosts: number
+  openHosts: number,
+  regressed: boolean
 ): FindingStatus {
   if (openHosts === 0) {
     return "resolved";
+  }
+  // A finding that came back outranks an acknowledgement made before it did.
+  if (regressed) {
+    return "regressed";
   }
   return finding.acknowledgedAt ? "acknowledged" : "open";
 }
@@ -486,6 +518,23 @@ export class DrizzleFleetRepository implements FleetRepository {
           (sup.hostId === null || sup.hostId === row.hostId)
       );
 
+    // The ordered sequence of findings-carrying reports per machine. A finding
+    // that is present, then absent, then present again has regressed — and
+    // that is only visible against the sequence, not against the latest report.
+    const sequence = await this.db
+      .select({ id: hostReport.id, hostId: hostReport.hostId })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true))
+      .orderBy(hostReport.hostId, hostReport.receivedAt);
+
+    const reportsByHost = new Map<string, string[]>();
+    for (const row of sequence) {
+      reportsByHost.set(row.hostId, [
+        ...(reportsByHost.get(row.hostId) ?? []),
+        row.id,
+      ]);
+    }
+
     const acks = await this.db.select().from(findingAcknowledgement);
     const ackByKey = new Map(
       acks.map((a) => [`${a.hostId}::${a.fingerprint}`, a])
@@ -495,6 +544,8 @@ export class DrizzleFleetRepository implements FleetRepository {
       finding: FleetFinding;
       openHosts: Set<string>;
       seenHosts: Set<string>;
+      /** Reports that carried this finding, per machine. */
+      reportsByHost: Map<string, Set<string>>;
     };
     const byFingerprint = new Map<string, Accumulator>();
 
@@ -522,9 +573,16 @@ export class DrizzleFleetRepository implements FleetRepository {
         },
         openHosts: new Set<string>(),
         seenHosts: new Set<string>(),
+        reportsByHost: new Map<string, Set<string>>(),
       };
 
       entry.seenHosts.add(row.hostId);
+      entry.reportsByHost.set(
+        row.hostId,
+        (entry.reportsByHost.get(row.hostId) ?? new Set<string>()).add(
+          row.reportId
+        )
+      );
       if (row.isLatest) {
         entry.openHosts.add(row.hostId);
       }
@@ -545,10 +603,14 @@ export class DrizzleFleetRepository implements FleetRepository {
     }
 
     return [...byFingerprint.values()]
-      .map(({ finding, openHosts }) => ({
+      .map(({ finding, openHosts, reportsByHost: carried }) => ({
         ...finding,
         machineCount: openHosts.size,
-        status: resolveStatus(finding, openHosts.size),
+        status: resolveStatus(
+          finding,
+          openHosts.size,
+          hasGap(carried, reportsByHost)
+        ),
       }))
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   }
