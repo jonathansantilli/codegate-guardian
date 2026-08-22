@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import type {
-  CreateGuestUserResult,
   CreateUserInput,
   UserRepository,
 } from "@/src/application/ports/persistence/user-repository";
@@ -22,13 +21,5 @@ export class DrizzleUserRepository implements UserRepository {
     await this.db
       .insert(user)
       .values({ email: input.email, password: input.passwordHash });
-  }
-
-  async createGuest(input: CreateUserInput): Promise<CreateGuestUserResult> {
-    const [row] = await this.db
-      .insert(user)
-      .values({ email: input.email, password: input.passwordHash })
-      .returning({ id: user.id, email: user.email });
-    return { id: row.id, email: row.email };
   }
 }

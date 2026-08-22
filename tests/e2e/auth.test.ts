@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+// These are the signed-out screens; a stored session would be redirected away
+// from them before the first assertion.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe("Authentication Pages", () => {
   test("login page renders correctly", async ({ page }) => {
     await page.goto("/login");

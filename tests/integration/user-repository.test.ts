@@ -40,17 +40,4 @@ describe("Feature: UserRepository (Drizzle-Postgres)", () => {
     assert.equal(users[0].password, "hashed:pw");
     assert.equal(users[0].isAnonymous, false);
   });
-
-  it("Given createGuest is called, when findByEmail runs afterwards, then the guest row carries the returned id and email", async () => {
-    const result = await repository.createGuest({
-      email: "guest-12345",
-      passwordHash: "hashed:guest",
-    });
-
-    assert.ok(result.id);
-    assert.equal(result.email, "guest-12345");
-    const users = await repository.findByEmail("guest-12345");
-    assert.equal(users.length, 1);
-    assert.equal(users[0].id, result.id);
-  });
 });

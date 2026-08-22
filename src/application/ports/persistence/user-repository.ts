@@ -10,13 +10,7 @@ export type CreateUserInput = {
   passwordHash: string;
 };
 
-export type CreateGuestUserResult = {
-  id: string;
-  email: string;
-};
-
 export type UserRepository = {
   findByEmail(email: string): Promise<User[]>;
   create(input: CreateUserInput): Promise<void>;
-  createGuest(input: CreateUserInput): Promise<CreateGuestUserResult>;
 };

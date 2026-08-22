@@ -92,8 +92,7 @@ test.describe("Feature: agent ingest", () => {
   });
 
   test("an export of an unknown kind is refused", async ({ page }) => {
-    // A bare request would be redirected into guest sign-in and answered 200,
-    // so the call is made from a page that already holds a session.
+    // Made from a page that holds the operator session, as the console does.
     await page.goto("/fleet");
     const status = await page.evaluate(async () => {
       const response = await fetch("/api/fleet/export?kind=secrets&format=csv");
@@ -117,5 +116,40 @@ test.describe("Feature: agent ingest", () => {
     });
     expect(result.status).toBe(200);
     expect(result.disposition).toContain("attachment");
+  });
+});
+
+test.describe("Feature: the console is not open to anyone who can reach it", () => {
+  // No stored session: this is what an unauthenticated caller sees.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("a browser is sent to sign in, not handed a session", async ({
+    page,
+  }) => {
+    await page.goto("/fleet");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  for (const route of [
+    "/api/fleet",
+    "/api/fleet/findings",
+    "/api/fleet/export?kind=machines&format=csv",
+  ]) {
+    test(`${route} answers 401 rather than provisioning a session`, async ({
+      request,
+    }) => {
+      const response = await request.get(route, { maxRedirects: 0 });
+      expect(response.status()).toBe(401);
+    });
+  }
+
+  test("minting an enrolment code requires a session", async ({ request }) => {
+    // This was the first step of a chain that ended in the fleet's ingest
+    // token: anonymous mint, then redeem at the unauthenticated enrol endpoint.
+    const response = await request.post("/api/fleet/enrolment", {
+      data: { maxUses: 1 },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(401);
   });
 });
