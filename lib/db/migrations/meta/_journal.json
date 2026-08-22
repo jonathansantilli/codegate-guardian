@@ -50,6 +50,13 @@
       "when": 1787415833210,
       "tag": "0006_condemned_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787417258729,
+      "tag": "0007_graceful_tusk",
+      "breakpoints": true
     }
   ]
 }

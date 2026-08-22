@@ -21,13 +21,19 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return Response.json({ error: "Invalid enrolment request" }, { status: 400 });
+    return Response.json(
+      { error: "Invalid enrolment request" },
+      { status: 400 }
+    );
   }
 
   const token = container.env.AGENT_INGEST_TOKEN;
   if (!token) {
     return Response.json(
-      { error: "This server is not accepting agents: no ingest token is configured." },
+      {
+        error:
+          "This server is not accepting agents: no ingest token is configured.",
+      },
       { status: 503 }
     );
   }
@@ -41,10 +47,23 @@ export async function POST(request: Request) {
     // One message for every failure: unknown, expired, revoked, and spent are
     // all the same to a caller who should not be probing which.
     return Response.json(
-      { error: "That enrolment code cannot be used. Ask an operator for a new one." },
+      {
+        error:
+          "That enrolment code cannot be used. Ask an operator for a new one.",
+      },
       { status: 403 }
     );
   }
+
+  await container.ports.fleet.recordActivity({
+    occurredAt: new Date(),
+    actorKind: "agent",
+    actorName: parsed.data.machineId,
+    action: "Enrolled",
+    target: "enrolment code redeemed",
+    result: "Accepted",
+    apiCall: "POST /api/agent/enrol",
+  });
 
   return Response.json({ token, server: container.env.APP_URL });
 }

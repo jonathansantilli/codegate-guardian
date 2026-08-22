@@ -37,6 +37,9 @@ import {
 } from "@/lib/security/fleet-presentation";
 import { cn, fetcher } from "@/lib/utils";
 import type { FindingStatus } from "@/src/application/ports/fleet/fleet-repository";
+import { AccessPanel, ActivityPanel, PoliciesPanel } from "./console-panels";
+import { EvidenceView } from "./evidence-view";
+import { LifecycleTrack } from "./lifecycle-track";
 
 type HostSummary = {
   host: {
@@ -70,6 +73,9 @@ type FleetFinding = {
   machineCount: number;
   lastSeenAt: string;
   acknowledgedBy: string | null;
+  evidence?: string | null;
+  line?: number | null;
+  column?: number | null;
 };
 
 const severityColor: Record<string, string> = {
@@ -95,7 +101,13 @@ type ArtifactGroup = {
   machineCount: number;
 };
 
-type FleetView = "machines" | "artifacts" | "people";
+type FleetView =
+  | "machines"
+  | "artifacts"
+  | "people"
+  | "policies"
+  | "activity"
+  | "access";
 
 type HostDetail = {
   host: HostSummary["host"];
@@ -152,6 +164,7 @@ export function FleetDashboard() {
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null);
   const [view, setView] = useState<FleetView>("machines");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [openFinding, setOpenFinding] = useState<string | null>(null);
 
   const { data, isLoading } = useSWR<{ hosts: HostSummary[] }>(
     `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet`,
@@ -243,40 +256,67 @@ export function FleetDashboard() {
           </div>
           <ul className="divide-y divide-border/40">
             {outstanding.map((finding) => (
-              <li
-                className="flex items-start gap-3 px-4 py-3"
-                key={finding.fingerprint}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 font-medium text-xs tabular-nums",
-                    severityColor[finding.severity] ?? "text-muted-foreground"
-                  )}
+              <li key={finding.fingerprint}>
+                <button
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/40"
+                  onClick={() =>
+                    setOpenFinding(
+                      openFinding === finding.fingerprint
+                        ? null
+                        : finding.fingerprint
+                    )
+                  }
+                  type="button"
                 >
-                  {finding.severity}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm">{finding.description}</p>
-                  <p className="truncate font-mono text-muted-foreground text-xs">
-                    {finding.ruleId}
-                    {finding.filePath ? ` · ${finding.filePath}` : ""}
-                  </p>
-                  <p className="mt-1 text-muted-foreground text-xs">
-                    {statusExplanation(
-                      finding.status,
-                      new Date(finding.lastSeenAt)
+                  <span
+                    className={cn(
+                      "mt-0.5 font-medium text-xs tabular-nums",
+                      severityColor[finding.severity] ?? "text-muted-foreground"
                     )}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <Badge className="font-normal text-xs" variant="secondary">
-                    {STATUS_LABEL[finding.status]}
-                  </Badge>
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {finding.machineCount} machine
-                    {finding.machineCount === 1 ? "" : "s"}
+                  >
+                    {finding.severity}
                   </span>
-                </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm">{finding.description}</p>
+                    <p className="truncate font-mono text-muted-foreground text-xs">
+                      {finding.ruleId}
+                      {finding.filePath ? ` · ${finding.filePath}` : ""}
+                    </p>
+                    <p className="mt-1 text-muted-foreground text-xs">
+                      {statusExplanation(
+                        finding.status,
+                        new Date(finding.lastSeenAt)
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge className="font-normal text-xs" variant="secondary">
+                      {STATUS_LABEL[finding.status]}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {finding.machineCount} machine
+                      {finding.machineCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                </button>
+                {openFinding === finding.fingerprint && (
+                  <div className="flex flex-col gap-4 border-border/40 border-t bg-muted/20 px-4 py-4">
+                    <LifecycleTrack status={finding.status} />
+                    <p className="text-muted-foreground text-xs">
+                      {statusExplanation(
+                        finding.status,
+                        new Date(finding.lastSeenAt)
+                      )}
+                    </p>
+                    <EvidenceView
+                      column={finding.column ?? null}
+                      contentHash={finding.contentHash}
+                      evidence={finding.evidence ?? null}
+                      filePath={finding.filePath}
+                      line={finding.line ?? null}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -284,7 +324,16 @@ export function FleetDashboard() {
       )}
 
       <div className="mb-4 flex items-center gap-1">
-        {(["machines", "artifacts", "people"] as const).map((tab) => (
+        {(
+          [
+            "machines",
+            "artifacts",
+            "people",
+            "policies",
+            "activity",
+            "access",
+          ] as const
+        ).map((tab) => (
           <button
             className={cn(
               "h-8 rounded-lg px-3 font-medium text-sm capitalize transition-colors",
@@ -300,6 +349,10 @@ export function FleetDashboard() {
           </button>
         ))}
       </div>
+
+      {view === "policies" && <PoliciesPanel />}
+      {view === "activity" && <ActivityPanel />}
+      {view === "access" && <AccessPanel />}
 
       {view === "artifacts" && (
         <div className="overflow-hidden rounded-xl border border-border/50">

@@ -9,6 +9,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type {
+  ActivityRecord,
   ArtifactGroup,
   EnrolmentCodeSummary,
   FindingStatus,
@@ -17,8 +18,11 @@ import type {
   HostDetail,
   HostSummary,
   MintEnrolmentCodeInput,
+  PolicyRecord,
+  RecordActivityInput,
   RecordedReport,
   RecordHostReportInput,
+  SavePolicyInput,
   SuppressFindingInput,
   Suppression,
 } from "@/src/application/ports/fleet/fleet-repository";
@@ -28,6 +32,7 @@ import type {
 } from "@/src/domain/fleet/entities/host";
 import type { DrizzleDb } from "../client";
 import {
+  activityEvent,
   enrolmentCode,
   findingAcknowledgement,
   findingSuppression,
@@ -35,6 +40,7 @@ import {
   hostFinding,
   hostInventoryItem,
   hostReport,
+  policy,
 } from "../schema";
 
 // Postgres caps a statement at 65535 bound parameters; inventory rows bind
@@ -445,6 +451,9 @@ export class DrizzleFleetRepository implements FleetRepository {
         description: hostFinding.description,
         filePath: hostFinding.filePath,
         contentHash: hostFinding.contentHash,
+        evidence: hostFinding.evidence,
+        line: hostFinding.line,
+        column: hostFinding.column,
         reportId: hostFinding.reportId,
         collectedAt: hostReport.collectedAt,
         isLatest: sql<boolean>`(${hostFinding.reportId} = ${latest.id})`,
@@ -507,6 +516,9 @@ export class DrizzleFleetRepository implements FleetRepository {
           lastSeenAt: row.collectedAt,
           acknowledgedBy: null,
           acknowledgedAt: null,
+          evidence: row.evidence,
+          line: row.line,
+          column: row.column,
         },
         openHosts: new Set<string>(),
         seenHosts: new Set<string>(),
@@ -721,5 +733,110 @@ export class DrizzleFleetRepository implements FleetRepository {
       .returning({ id: enrolmentCode.id });
 
     return row ? { id: row.id } : null;
+  }
+  async recordActivity(input: RecordActivityInput): Promise<void> {
+    await this.db.insert(activityEvent).values(input);
+  }
+
+  async listActivity(limit = 100): Promise<ActivityRecord[]> {
+    return await this.db
+      .select()
+      .from(activityEvent)
+      .orderBy(desc(activityEvent.occurredAt))
+      .limit(limit);
+  }
+
+  async savePolicy(input: SavePolicyInput): Promise<{ id: string }> {
+    if (input.id) {
+      const [row] = await this.db
+        .update(policy)
+        .set({
+          name: input.name,
+          description: input.description ?? null,
+          ruleId: input.ruleId,
+          severity: input.severity as "CRITICAL",
+          enabled: input.enabled,
+          version: sql`${policy.version} + 1`,
+          updatedAt: input.now,
+        })
+        .where(eq(policy.id, input.id))
+        .returning({ id: policy.id });
+      return { id: row.id };
+    }
+
+    const [row] = await this.db
+      .insert(policy)
+      .values({
+        name: input.name,
+        description: input.description ?? null,
+        ruleId: input.ruleId,
+        severity: input.severity as "CRITICAL",
+        enabled: input.enabled,
+        createdBy: input.createdBy,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .returning({ id: policy.id });
+    return { id: row.id };
+  }
+
+  /**
+   * Policies with live compliance.
+   *
+   * Evaluated here against each machine's latest report — a policy never
+   * reaches a machine, so "violating" means "last reported a finding matching
+   * this rule", nothing more.
+   */
+  async listPolicies(): Promise<PolicyRecord[]> {
+    const policies = await this.db
+      .select()
+      .from(policy)
+      .orderBy(desc(policy.updatedAt));
+    if (policies.length === 0) {
+      return [];
+    }
+
+    const latest = this.db
+      .selectDistinctOn([hostReport.hostId], {
+        id: hostReport.id,
+        hostId: hostReport.hostId,
+      })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true))
+      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .as("latest");
+
+    const violations = await this.db
+      .select({
+        ruleId: hostFinding.ruleId,
+        machines: sql<number>`cast(count(distinct ${hostFinding.hostId}) as int)`,
+      })
+      .from(hostFinding)
+      .innerJoin(latest, eq(hostFinding.reportId, latest.id))
+      .where(eq(hostFinding.suppressed, false))
+      .groupBy(hostFinding.ruleId);
+
+    const [{ evaluated } = { evaluated: 0 }] = await this.db
+      .select({
+        evaluated: sql<number>`cast(count(distinct ${hostReport.hostId}) as int)`,
+      })
+      .from(hostReport)
+      .where(eq(hostReport.findingsReported, true));
+
+    const byRule = new Map(violations.map((v) => [v.ruleId, v.machines]));
+
+    return policies.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      ruleId: row.ruleId,
+      severity: row.severity,
+      version: row.version,
+      enabled: row.enabled,
+      createdBy: row.createdBy,
+      updatedAt: row.updatedAt,
+      violatingMachines: row.enabled ? (byRule.get(row.ruleId) ?? 0) : 0,
+      evaluatedMachines: evaluated,
+    }));
   }
 }

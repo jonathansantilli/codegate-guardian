@@ -48,13 +48,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const created = await getContainer().ports.fleet.suppressFinding({
+  const actor = session.user.email ?? session.user.id ?? "unknown";
+  const fleet = getContainer().ports.fleet;
+  const now = new Date();
+
+  const created = await fleet.suppressFinding({
     ...parsed.data,
     createdBy: session.user.email ?? session.user.id ?? "unknown",
     createdAt: new Date(),
     expiresAt: parsed.data.expiresAt
       ? new Date(parsed.data.expiresAt)
       : undefined,
+  });
+
+  await fleet.recordActivity({
+    occurredAt: now,
+    actorKind: "person",
+    actorName: actor,
+    action: `Suppressed a finding (${parsed.data.scope})`,
+    target: parsed.data.fingerprint ?? parsed.data.ruleId ?? null,
+    result: parsed.data.reason,
+    apiCall: "POST /api/fleet/suppressions",
   });
 
   return Response.json(created, { status: 201 });
@@ -71,9 +85,22 @@ export async function DELETE(request: Request) {
     return new ChatbotError("bad_request:api").toResponse();
   }
 
-  await getContainer().ports.fleet.revokeSuppression({
+  const actor = session.user.email ?? session.user.id ?? "unknown";
+  const fleet = getContainer().ports.fleet;
+  const now = new Date();
+
+  await fleet.revokeSuppression({
     id,
     revokedAt: new Date(),
+  });
+  await fleet.recordActivity({
+    occurredAt: now,
+    actorKind: "person",
+    actorName: actor,
+    action: "Revoked a suppression",
+    target: id,
+    result: "Revoked",
+    apiCall: "DELETE /api/fleet/suppressions",
   });
   return Response.json({ ok: true });
 }

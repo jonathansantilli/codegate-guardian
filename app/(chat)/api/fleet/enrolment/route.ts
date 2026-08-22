@@ -50,7 +50,8 @@ export async function POST(request: Request) {
   const now = new Date();
   const code = generateEnrolmentCode();
 
-  await getContainer().ports.fleet.mintEnrolmentCode({
+  const fleet = getContainer().ports.fleet;
+  await fleet.mintEnrolmentCode({
     code,
     label: parsed.data.label,
     maxUses: parsed.data.maxUses,
@@ -61,5 +62,15 @@ export async function POST(request: Request) {
 
   // Returned once, in full. The console shows it so an operator can copy it;
   // it is not a secret worth hiding from the person who just minted it.
+  await fleet.recordActivity({
+    occurredAt: now,
+    actorKind: "person",
+    actorName: session.user.email ?? session.user.id ?? "unknown",
+    action: "Minted an enrolment code",
+    target: parsed.data.label ?? code,
+    result: `${parsed.data.maxUses} use${parsed.data.maxUses === 1 ? "" : "s"}`,
+    apiCall: "POST /api/fleet/enrolment",
+  });
+
   return Response.json({ code }, { status: 201 });
 }

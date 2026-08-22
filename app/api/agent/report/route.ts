@@ -116,6 +116,16 @@ export async function POST(request: Request) {
       findings: payload.findings?.map(toFindingInput),
     });
 
+    await container.ports.fleet.recordActivity({
+      occurredAt: receivedAt,
+      actorKind: "agent",
+      actorName: payload.host.hostname,
+      action: "Reported inventory",
+      target: `${payload.inventory.items.length} artifacts · ${payload.findings?.length ?? 0} findings`,
+      result: "Accepted",
+      apiCall: "POST /api/agent/report",
+    });
+
     return Response.json({
       hostId,
       reportId,
