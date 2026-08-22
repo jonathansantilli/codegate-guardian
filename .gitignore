@@ -39,3 +39,4 @@ local-models.config.json
 docs/codegate-guardian-hackathon-handoff.md
 docs/codegate-guardian-tasks.md
 docs/plans/
+tests/e2e/.auth/

@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-// Phase 1 — feature coverage row 48 (middleware): /ping liveness.
-// Intentionally minimal; the redirect flow is exercised by the guest
-// auto-provision path (covered in Phase 11 alongside the auth use case).
+// /ping is the liveness probe: it must answer before any session gate, so a
+// container health check never depends on authentication.
 test.describe("Feature: proxy middleware — liveness", () => {
   test("Given a GET /ping request, when no auth exists, then /ping responds 200 'pong' without redirect", async ({
     request,

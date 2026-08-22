@@ -52,10 +52,17 @@ export default defineConfig({
   /* Configure projects */
   projects: [
     {
+      // Gets a session the way a person does; everything below reuses it.
+      name: "setup",
+      testMatch: /e2e\/.*\.setup\.ts/,
+    },
+    {
       name: "e2e",
       testMatch: /e2e\/.*.test.ts/,
+      dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/operator.json",
       },
     },
 

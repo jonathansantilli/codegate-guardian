@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { guestRegex } from "./lib/constants";
 import { isSecureRequest } from "./lib/security/request-protocol";
 import { AGENT_ROUTE_PREFIX, UPLOADS_ROUTE_PATH } from "./src/shared/routes";
+
+/** Reachable without a session: everything else needs one. */
+const PUBLIC_PATHS = new Set(["/login", "/register"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,9 +17,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Agents authenticate with a bearer token, not a session cookie. Without
-  // this exemption the session gate would answer a machine check-in with a
-  // redirect to guest sign-in.
+  // Agents authenticate with a bearer token, not a session cookie, so the
+  // session gate must not answer a machine check-in with a sign-in page.
   if (pathname.startsWith(AGENT_ROUTE_PREFIX)) {
     return NextResponse.next();
   }
@@ -41,17 +42,33 @@ export async function proxy(request: NextRequest) {
 
   const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
+  // Signing in is how you get in, and the only way.
+  //
+  // This console previously auto-provisioned a session for anyone who asked,
+  // inherited from the chat starter it grew inside. On a fleet security
+  // console that meant reaching the port was the whole of authentication: an
+  // anonymous caller could read every machine, mint an enrolment code and
+  // exchange it for the fleet's ingest token.
   if (!token) {
-    const redirectUrl = encodeURIComponent(new URL(request.url).pathname);
+    if (PUBLIC_PATHS.has(pathname)) {
+      return NextResponse.next();
+    }
 
-    return NextResponse.redirect(
-      new URL(`${base}/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
-    );
+    const signIn = new URL(`${base}/login`, request.url);
+    const wanted = new URL(request.url);
+    if (wanted.pathname !== "/") {
+      signIn.searchParams.set("callbackUrl", wanted.pathname + wanted.search);
+    }
+    // An API call cannot follow a redirect into a form. Answer it as what it
+    // is — unauthenticated — so a script sees 401 rather than a login page
+    // with a 200 on it.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(signIn);
   }
 
-  const isGuest = guestRegex.test(token?.email ?? "");
-
-  if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
+  if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.redirect(new URL(`${base}/`, request.url));
   }
 
