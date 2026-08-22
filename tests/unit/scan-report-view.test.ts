@@ -4,7 +4,7 @@ import {
   calculateRiskScore,
   extractScanReportView,
   severityOrder,
-} from "@/lib/security/scan-report-view";
+} from "@/src/domain/reporting/services/scan-report-view";
 
 describe("scan report view", () => {
   test("extracts report data and sorts findings by severity", () => {

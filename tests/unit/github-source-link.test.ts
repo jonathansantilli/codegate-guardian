@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
-import { buildGitHubSourceUrl } from "@/lib/security/github-source-link";
+import { buildGitHubSourceUrl } from "@/src/domain/reporting/services/github-source-link";
 
 describe("github source link builder", () => {
   test("builds file link with line anchor", () => {

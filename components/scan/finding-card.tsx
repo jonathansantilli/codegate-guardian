@@ -7,11 +7,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 import type {
   ScanFindingView,
   ScanSeverity,
-} from "@/lib/security/scan-report-view";
-import { cn } from "@/lib/utils";
+} from "@/src/domain/reporting/services/scan-report-view";
 
 const severityClasses: Record<
   ScanSeverity,

@@ -20,8 +20,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { buildGitHubSourceUrl } from "@/lib/security/github-source-link";
 import { cn, fetcher } from "@/lib/utils";
+import { buildGitHubSourceUrl } from "@/src/domain/reporting/services/github-source-link";
 
 type FindingLocation = {
   filePath: string | null;

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { describe, test } from "node:test";
-import { extractFindingLocations } from "@/lib/security/report-finding-detail";
+import { extractFindingLocations } from "@/src/domain/reporting/services/report-finding-detail";
 
 describe("report finding detail metadata", () => {
   test("uses structured raw finding location and affected locations", () => {

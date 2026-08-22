@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import {
   complianceScoreClasses,
   riskExposureScoreClasses,
-} from "@/lib/security/report-score-semantics";
+} from "@/src/domain/scan/services/report-score-semantics";
 
 describe("report score semantics", () => {
   test("treats high risk score as bad (red)", () => {

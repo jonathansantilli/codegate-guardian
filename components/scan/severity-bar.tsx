@@ -1,8 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { SeverityCounts } from "@/lib/security/scan-report-view";
 import { cn } from "@/lib/utils";
+import type { SeverityCounts } from "@/src/domain/reporting/services/scan-report-view";
 
 const severityMeta: Array<{
   key: keyof SeverityCounts;

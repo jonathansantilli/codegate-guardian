@@ -22,11 +22,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn, fetcher } from "@/lib/utils";
 import {
   complianceScoreClasses,
   riskExposureScoreClasses,
-} from "@/lib/security/report-score-semantics";
-import { cn, fetcher } from "@/lib/utils";
+} from "@/src/domain/scan/services/report-score-semantics";
 
 type PolicyStatus = "pass" | "warn" | "fail";
 type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";

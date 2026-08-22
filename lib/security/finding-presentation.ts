@@ -3,20 +3,13 @@ import type { FindingStatus } from "@/src/application/ports/fleet/fleet-reposito
 // Presentation rules for findings, kept out of the component so the severity
 // order and the lifecycle vocabulary are stated once and can be tested.
 
-export const SEVERITY_ORDER = [
-  "CRITICAL",
-  "HIGH",
-  "MEDIUM",
-  "LOW",
-  "INFO",
-] as const;
-
-export type Severity = (typeof SEVERITY_ORDER)[number];
-
-export function severityRank(severity: string): number {
-  const index = SEVERITY_ORDER.indexOf(severity as Severity);
-  return index === -1 ? SEVERITY_ORDER.length : index;
-}
+// The order is a domain fact, not a presentation choice — the console shows
+// what the domain ranks, and a second list here could disagree with it.
+export {
+  SEVERITIES as SEVERITY_ORDER,
+  type Severity,
+  severityRank,
+} from "@/src/domain/scan/value-objects/severity";
 
 /**
  * What the console calls each lifecycle state. "Resolved" deliberately reads

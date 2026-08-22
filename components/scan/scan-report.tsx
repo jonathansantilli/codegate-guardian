@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { extractScanReportView } from "@/lib/security/scan-report-view";
+import { extractScanReportView } from "@/src/domain/reporting/services/scan-report-view";
 import { FindingCard } from "./finding-card";
 import { SeverityBar } from "./severity-bar";
 

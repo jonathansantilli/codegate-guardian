@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import useSWR, { mutate } from "swr";
+import { SEVERITY_ORDER } from "@/lib/security/finding-presentation";
 import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
@@ -28,8 +29,6 @@ type Policy = {
   violatingMachines: number;
   evaluatedMachines: number;
 };
-
-const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] as const;
 
 /** Rules worth starting from, named the way an operator would describe them. */
 const TEMPLATES: {
@@ -539,7 +538,7 @@ function PolicyEditor({
               style={{ height: "36px" }}
               value={draft.severity}
             >
-              {SEVERITIES.map((sev) => (
+              {SEVERITY_ORDER.map((sev) => (
                 <option key={sev} value={sev}>
                   {sev}
                 </option>

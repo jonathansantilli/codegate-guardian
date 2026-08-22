@@ -5,18 +5,18 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { DocumentNotFoundError } from "@/src/application/ports/persistence/document-repository";
 import {
   extractFindingLocations,
   extractStringArrayField,
   type FindingLocation,
-} from "@/lib/security/report-finding-detail";
-import { extractNormalizedScanRunsFromMessages } from "@/lib/security/report-normalization";
+} from "@/src/domain/reporting/services/report-finding-detail";
 import {
   buildReportingOverview,
   type ReportingOverview,
   type ReportSeverity,
-} from "@/lib/security/reporting-overview";
-import { DocumentNotFoundError } from "@/src/application/ports/persistence/document-repository";
+} from "@/src/domain/reporting/services/reporting-overview";
+import { extractNormalizedScanRunsFromMessages } from "@/src/domain/scan/services/report-normalization";
 import { DrizzleChatRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/chat-repository";
 import { DrizzleDocumentRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/document-repository";
 import { DrizzleMessageRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/message-repository";
