@@ -110,7 +110,10 @@ export type HostDetail = {
   host: Host;
   lastCollectedAt: Date | null;
   kbVersion: string | null;
+  /** What the machine actually carries. A probed path that is not there is not an artifact. */
   items: HostDetailItem[];
+  /** How many paths the agent looked at, including the ones it did not find. */
+  itemsChecked: number;
   /** Findings the machine's most recent findings-bearing report carried. */
   findings: HostFindingRow[];
   /** Newest first. What the machine has sent, and how it changed. */

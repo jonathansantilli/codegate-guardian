@@ -39,6 +39,7 @@ export type HostDetail = {
   };
   lastCollectedAt: string | null;
   kbVersion: string | null;
+  itemsChecked: number;
   items: {
     tool: string;
     kind: string;
@@ -345,6 +346,20 @@ export function MachineInventory({ hostId }: { hostId: string }) {
               </tbody>
             </table>
           </div>
+          <div
+            style={{
+              marginTop: "auto",
+              padding: "10px 16px",
+              borderTop: "1px solid var(--border)",
+              flexShrink: 0,
+              fontSize: "11.5px",
+              color: "var(--fg3)",
+            }}
+          >
+            {detail.items.length} present of {detail.itemsChecked} paths the
+            agent checked. A path a tool could use but does not have is not an
+            artifact.
+          </div>
         </Card>
 
         <div
@@ -480,7 +495,9 @@ function ReportHistory({ reports }: { reports: HostDetail["reports"] }) {
                 minute: "2-digit",
               })}
             </span>
-            <span style={{ flex: 1 }}>{report.itemsTotal} items</span>
+            {/* The stored total counts every path probed, not what was
+                found — so it is labelled for what it is. */}
+            <span style={{ flex: 1 }}>{report.itemsTotal} paths checked</span>
             {report.criticalTotal > 0 ? (
               <Badge tone="crit">{report.criticalTotal} crit</Badge>
             ) : delta === 0 ? (
@@ -488,7 +505,7 @@ function ReportHistory({ reports }: { reports: HostDetail["reports"] }) {
             ) : (
               <Badge tone="sec">
                 {delta > 0 ? "+" : ""}
-                {delta} items
+                {delta} paths
               </Badge>
             )}
           </div>
@@ -738,7 +755,7 @@ export function MachineHistory({ hostId }: { hostId: string }) {
               <tr>
                 <th>Collected</th>
                 <th>Received</th>
-                <th className="r">Artifacts</th>
+                <th className="r">Paths checked</th>
                 <th className="r">Findings</th>
                 <th>Carried findings</th>
               </tr>

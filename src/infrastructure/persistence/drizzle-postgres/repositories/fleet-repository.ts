@@ -412,21 +412,28 @@ export class DrizzleFleetRepository implements FleetRepository {
         lastCollectedAt: null,
         kbVersion: null,
         items: [],
+        itemsChecked: 0,
         findings: [],
         reports: [],
       };
     }
 
-    const items = await this.db
+    // The agent probes every path a tool could use and reports all of them,
+    // present or not. Only the ones that are there are artifacts — counting
+    // the misses as inventory overstates a machine several times over, and
+    // disagrees with the fleet-wide artifact list, which already filters them.
+    const probed = await this.db
       .select()
       .from(hostInventoryItem)
       .where(eq(hostInventoryItem.reportId, report.id))
       .orderBy(hostInventoryItem.tool, hostInventoryItem.path);
+    const items = probed.filter((item) => item.exists);
 
     return {
       host: hostRow,
       lastCollectedAt: report.collectedAt,
       kbVersion: report.kbVersion,
+      itemsChecked: probed.length,
       items: items.map((item) => ({
         tool: item.tool,
         kind: item.kind as InventoryItemKind,
