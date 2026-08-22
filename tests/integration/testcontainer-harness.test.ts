@@ -26,18 +26,44 @@ describe("testcontainer-pg harness", () => {
         ORDER BY tablename
     `;
     const names = tables.map((row) => row.tablename);
-    assert.ok(
-      names.includes("User"),
-      "User table should exist after migrations"
-    );
-    assert.ok(
-      names.includes("Chat"),
-      "Chat table should exist after migrations"
-    );
-    assert.ok(
-      names.includes("ScanRun_v1"),
-      "ScanRun_v1 table should exist after migrations"
-    );
+
+    // The tables the console actually needs, so a broken migration chain
+    // fails here rather than at the first check-in.
+    for (const table of [
+      "User",
+      "Host_v1",
+      "HostReport_v1",
+      "HostInventoryItem_v1",
+      "HostFinding_v1",
+      "FindingAcknowledgement_v1",
+      "FindingSuppression_v1",
+      "EnrolmentCode_v1",
+      "ActivityEvent_v1",
+      "Policy_v1",
+    ]) {
+      assert.ok(
+        names.includes(table),
+        `${table} should exist after migrations`
+      );
+    }
+
+    // And the ones the chat application owned, which migration 0009 drops.
+    // A fresh database must not carry them, or the drop silently did nothing.
+    for (const table of [
+      "Chat",
+      "Message_v2",
+      "Vote_v2",
+      "Document",
+      "Suggestion",
+      "Stream",
+      "ScanRun_v1",
+      "ScanFinding_v1",
+    ]) {
+      assert.ok(
+        !names.includes(table),
+        `${table} should be gone after migrations`
+      );
+    }
   });
 
   it("resetDatabase truncates user data without dropping schema", async () => {
