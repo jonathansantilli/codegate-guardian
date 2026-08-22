@@ -168,6 +168,8 @@ export type AttentionRow = {
   description: string;
   filePath: string | null;
   lastSeenAt: Date;
+  /** Who took responsibility ON THIS MACHINE, if anyone. */
+  acknowledgedBy: string | null;
 };
 
 /** The numbers the overview leads with, counted server-side. */
@@ -190,6 +192,8 @@ export type FleetOverview = {
   machinesWithFindings: number;
   /** How many attention rows exist in total, capped list or not. */
   attentionTotal: number;
+  /** Machines whose enrolment was withdrawn, excluded from every count above. */
+  hostsRevoked: number;
   /** When the newest accepted report arrived, or null if none ever has. */
   lastCheckInAt: Date | null;
   /** Reports rejected in the last hour, and why. Empty when ingest is healthy. */
@@ -324,6 +328,10 @@ export type ActivityRecord = {
 
 export type RecordActivityInput = Omit<ActivityRecord, "id">;
 
+export type SavePolicyResult =
+  | { outcome: "saved"; id: string }
+  | { outcome: "name-taken" };
+
 export type PolicyRecord = {
   id: string;
   name: string;
@@ -434,7 +442,13 @@ export type FleetRepository = {
     windowMs: number;
   }): Promise<void>;
   listActivity(limit?: number): Promise<ActivityRecord[]>;
-  savePolicy(input: SavePolicyInput): Promise<{ id: string }>;
+  /**
+   * Saves a policy, or reports that the name is taken.
+   *
+   * Names are unique because they are how an operator refers to a rule; a
+   * collision is an ordinary thing for a person to do, not a server fault.
+   */
+  savePolicy(input: SavePolicyInput): Promise<SavePolicyResult>;
   listPolicies(): Promise<PolicyRecord[]>;
   acknowledgeFinding(input: {
     hostId: string;

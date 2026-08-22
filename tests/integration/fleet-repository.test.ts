@@ -1128,6 +1128,136 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
     assert.equal(overview.machinesWithFindings, 0);
   });
 
+  it("Given a machine was reimaged onto an older feed, when reading the overview, then the age reflects what it runs now", async () => {
+    // Taking the max over every report ever stored made the feed age a
+    // permanent high-water mark: a version reported once in February stood
+    // forever, so a fleet since moved onto an old feed read as current. A
+    // false all-clear on a staleness signal is worse than a false alarm.
+    await repository.recordReport(
+      report({
+        kbVersion: "2026.08.20.1",
+        receivedAt: new Date("2026-02-01T10:00:00Z"),
+      })
+    );
+    await repository.recordReport(
+      report({
+        kbVersion: "2026.01.01.1",
+        receivedAt: new Date("2026-08-22T10:00:00Z"),
+      })
+    );
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.contentFeed.version, "2026.01.01.1");
+    assert.ok((overview.contentFeed.ageDays ?? 0) > 200);
+  });
+
+  it("Given only a revoked machine ran the newest feed, when reading the overview, then it does not speak for the live fleet", async () => {
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, kbVersion: "2026.08.20.1" })
+    );
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_B,
+        hostname: "other",
+        kbVersion: "2026.01.01.1",
+      })
+    );
+    const hosts = await repository.listHostSummaries();
+    const stale = hosts.find((h) => h.host.machineId === MACHINE_A);
+    await repository.revokeHost({
+      hostId: stale?.host.id ?? "",
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.contentFeed.version, "2026.01.01.1");
+  });
+
+  it("Given identical bytes under two different filenames, when grouping, then both names survive", async () => {
+    // Grouping by hash alone collapsed them into whichever name came first,
+    // and the other vanished from the inventory entirely.
+    const hash = `sha256:${"e".repeat(64)}`;
+    const item = (path: string) => ({
+      tool: "claude-code",
+      kind: "config" as const,
+      itemType: "file",
+      scope: "user" as const,
+      pattern: null,
+      path,
+      exists: true,
+      contentHash: hash,
+      riskSurface: [],
+      resolvedAgainst: null,
+    });
+
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, items: [item("/Users/alice/CLAUDE.md")] })
+    );
+    await repository.recordReport(
+      report({
+        machineId: MACHINE_B,
+        hostname: "bob",
+        items: [item("/Users/bob/AGENTS.md")],
+      })
+    );
+
+    const groups = await repository.listArtifactGroups();
+    const names = groups.map((g) => g.name).sort();
+
+    assert.deepEqual(names, ["AGENTS.md", "CLAUDE.md"]);
+    for (const group of groups) {
+      // Each row must be internally consistent: the group count and the
+      // variant beneath it cannot disagree.
+      assert.equal(group.machineCount, group.variants[0].machineCount);
+    }
+  });
+
+  it("Given a revoked machine carries a finding, when listing findings, then it is not left open forever", async () => {
+    // Its reports are refused, so the finding can never close — leaving it
+    // Open means a nav badge counting something present on no machine.
+    await repository.recordReport(report({ findings: [CRITICAL] }));
+    const [host] = await repository.listHostSummaries();
+    await repository.revokeHost({
+      hostId: host.host.id,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    const findings = await repository.listFindings();
+
+    assert.equal(findings.length, 0);
+  });
+
+  it("Given a finding acknowledged on one machine, when listing attention, then only that machine says so", async () => {
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, findings: [CRITICAL] })
+    );
+    await repository.recordReport(
+      report({ machineId: MACHINE_B, hostname: "other", findings: [CRITICAL] })
+    );
+    const hosts = await repository.listHostSummaries();
+    const acknowledged = hosts[0].host.id;
+
+    await repository.acknowledgeFinding({
+      hostId: acknowledged,
+      fingerprint: "fp-agg",
+      acknowledgedBy: "operator",
+      acknowledgedAt: NOW,
+    });
+
+    const rows = await repository.listAttention();
+    const taken = rows.filter((row) => row.acknowledgedBy !== null);
+    const open = rows.filter((row) => row.acknowledgedBy === null);
+
+    assert.equal(taken.length, 1);
+    assert.equal(taken[0].hostId, acknowledged);
+    // The other machine must still be actionable.
+    assert.equal(open.length, 1);
+  });
+
   it("Given one machine reports a finding twice, when listing suppressions, then the blast radius is one machine", async () => {
     await repository.recordReport(
       report({

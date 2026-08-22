@@ -44,6 +44,7 @@ type Overview = {
   lastCheckInAt: string | null;
   machinesWithFindings: number;
   attentionTotal: number;
+  hostsRevoked: number;
   rejections: {
     hostname: string;
     owner: string | null;
@@ -453,7 +454,7 @@ function Degraded({
       <StatGrid>
         <Stat
           label="Reporting"
-          sub={`of ${overview.hostsEnrolled} enrolled`}
+          sub={`of ${overview.hostsEnrolled} active${overview.hostsRevoked > 0 ? ` · ${overview.hostsRevoked} revoked` : ""}`}
           tone={overview.hostsReporting === 0 ? "var(--crit)" : undefined}
           value={overview.hostsReporting}
         />
@@ -624,7 +625,7 @@ function Active({
       <StatGrid>
         <Stat
           label="Reporting"
-          sub={`of ${overview.hostsEnrolled} enrolled`}
+          sub={`of ${overview.hostsEnrolled} active${overview.hostsRevoked > 0 ? ` · ${overview.hostsRevoked} revoked` : ""}`}
           value={overview.hostsReporting}
         />
         <Stat
@@ -663,7 +664,7 @@ function Active({
           }
           badge={
             worst.length > 0 ? (
-              <Badge tone="crit">{attention.length}</Badge>
+              <Badge tone="crit">{overview.attentionTotal}</Badge>
             ) : undefined
           }
           note="One row per machine per finding — a laptop each to fix"
