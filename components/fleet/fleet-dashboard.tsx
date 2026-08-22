@@ -19,6 +19,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  fleetShare,
+  hasMultipleVariants,
+  orderVariants,
+  shortHash,
+} from "@/lib/security/artifact-presentation";
+import {
   isOutstanding,
   STATUS_LABEL,
   severityRank,
@@ -40,6 +46,8 @@ type HostSummary = {
     platform: string | null;
     osRelease: string | null;
     username: string | null;
+    owner: string | null;
+    team: string | null;
     agentVersion: string | null;
     firstSeenAt: string;
     lastSeenAt: string;
@@ -71,6 +79,23 @@ const severityColor: Record<string, string> = {
   LOW: "text-sky-700 dark:text-sky-400",
   INFO: "text-muted-foreground",
 };
+
+type ArtifactVariant = {
+  contentHash: string;
+  machineCount: number;
+  firstSeenAt: string;
+  paths: string[];
+};
+
+type ArtifactGroup = {
+  name: string;
+  tool: string;
+  kind: string;
+  variants: ArtifactVariant[];
+  machineCount: number;
+};
+
+type FleetView = "machines" | "artifacts" | "people";
 
 type HostDetail = {
   host: HostSummary["host"];
@@ -125,6 +150,8 @@ function StatTile({
 
 export function FleetDashboard() {
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null);
+  const [view, setView] = useState<FleetView>("machines");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data, isLoading } = useSWR<{ hosts: HostSummary[] }>(
     `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet`,
@@ -136,6 +163,13 @@ export function FleetDashboard() {
     `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet/findings`,
     fetcher,
     { refreshInterval: 30_000 }
+  );
+
+  const { data: artifactData } = useSWR<{ artifacts: ArtifactGroup[] }>(
+    view === "artifacts"
+      ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/fleet/artifacts`
+      : null,
+    fetcher
   );
 
   const { data: detail } = useSWR<HostDetail>(
@@ -150,6 +184,17 @@ export function FleetDashboard() {
     (a, b) => severityRank(a.severity) - severityRank(b.severity)
   );
   const outstanding = findings.filter((f) => isOutstanding(f.status));
+  const artifacts = artifactData?.artifacts ?? [];
+
+  // Machines grouped by the person accountable for them.
+  const byOwner = new Map<string, HostSummary[]>();
+  for (const entry of hosts) {
+    const key = entry.host.owner ?? "Unassigned";
+    byOwner.set(key, [...(byOwner.get(key) ?? []), entry]);
+  }
+  const owners = [...byOwner.entries()].sort(
+    (a, b) => b[1].length - a[1].length
+  );
   const totals = hosts.reduce(
     (acc, entry) => ({
       skills: acc.skills + entry.skillsTotal,
@@ -238,13 +283,158 @@ export function FleetDashboard() {
         </div>
       )}
 
-      {isLoading && (
+      <div className="mb-4 flex items-center gap-1">
+        {(["machines", "artifacts", "people"] as const).map((tab) => (
+          <button
+            className={cn(
+              "h-8 rounded-lg px-3 font-medium text-sm capitalize transition-colors",
+              view === tab
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            key={tab}
+            onClick={() => setView(tab)}
+            type="button"
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {view === "artifacts" && (
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <div className="flex items-center gap-2.5 border-border/50 border-b bg-muted/30 px-4 py-2.5">
+            <h2 className="font-medium text-sm">Artifacts</h2>
+            <span className="text-muted-foreground text-xs">
+              Grouped by content hash — two files sharing a name but differing
+              by a byte are two artifacts here
+            </span>
+          </div>
+          {artifacts.length === 0 && (
+            <p className="px-4 py-6 text-center text-muted-foreground text-sm">
+              Nothing to inventory yet. Artifacts appear after a machine checks
+              in.
+            </p>
+          )}
+          <ul className="divide-y divide-border/40">
+            {artifacts.map((artifact) => (
+              <li key={`${artifact.tool}-${artifact.kind}-${artifact.name}`}>
+                <button
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40"
+                  onClick={() =>
+                    setExpanded(
+                      expanded === artifact.name ? null : artifact.name
+                    )
+                  }
+                  type="button"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">
+                        {artifact.name}
+                      </span>
+                      {hasMultipleVariants(artifact) && (
+                        <Badge
+                          className="font-normal text-xs"
+                          variant="secondary"
+                        >
+                          {artifact.variants.length} distinct files
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground text-xs">
+                      {artifact.tool} · {artifact.kind}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {artifact.machineCount} machine
+                      {artifact.machineCount === 1 ? "" : "s"}
+                    </span>
+                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-foreground"
+                        style={{
+                          width: `${fleetShare(artifact.machineCount, hosts.length)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </button>
+                {expanded === artifact.name && (
+                  <ul className="border-border/40 border-t bg-muted/20">
+                    {orderVariants(artifact.variants).map((variant) => (
+                      <li
+                        className="flex items-center gap-3 py-2 pr-4 pl-8"
+                        key={variant.contentHash}
+                      >
+                        <span className="font-mono text-muted-foreground text-xs">
+                          {shortHash(variant.contentHash)}
+                        </span>
+                        <span className="truncate font-mono text-muted-foreground text-xs">
+                          {variant.paths[0]}
+                        </span>
+                        <span className="ml-auto shrink-0 text-muted-foreground text-xs tabular-nums">
+                          {variant.machineCount} machine
+                          {variant.machineCount === 1 ? "" : "s"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view === "people" && (
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <div className="flex items-center gap-2.5 border-border/50 border-b bg-muted/30 px-4 py-2.5">
+            <h2 className="font-medium text-sm">People</h2>
+            <span className="text-muted-foreground text-xs">
+              Who is accountable for each machine
+            </span>
+          </div>
+          <ul className="divide-y divide-border/40">
+            {owners.map(([owner, machines]) => (
+              <li className="flex items-start gap-3 px-4 py-3" key={owner}>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm">{owner}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {machines[0].host.team ?? "No team recorded"}
+                  </p>
+                </div>
+                <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                  {machines.map((m) => (
+                    <button
+                      className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs hover:bg-muted/70"
+                      key={m.host.id}
+                      onClick={() => setSelectedHostId(m.host.id)}
+                      type="button"
+                    >
+                      {m.host.hostname}
+                    </button>
+                  ))}
+                </div>
+                <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                  {machines.length} machine{machines.length === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view === "machines" && isLoading && (
         <p className="text-muted-foreground text-sm">Loading machines…</p>
       )}
 
-      {!isLoading && hosts.length === 0 && <EmptyFleet />}
+      {view === "machines" && !isLoading && hosts.length === 0 && (
+        <EmptyFleet />
+      )}
 
-      {hosts.length > 0 && (
+      {view === "machines" && hosts.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-border/50">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
