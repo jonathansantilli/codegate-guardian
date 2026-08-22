@@ -372,8 +372,38 @@ export class DrizzleFleetRepository implements FleetRepository {
         firstSeenAt: new Date(row.firstSeenAt),
         paths: [row.path],
       });
-      group.machineCount += row.machineCount;
       groups.set(key, group);
+    }
+
+    // A machine carrying three variants of one name is still one machine.
+    // Summing the variant counts would treat it as three, which overstates
+    // spread on exactly the rows an operator is most likely to act on.
+    const perName = await this.db
+      .select({
+        tool: hostInventoryItem.tool,
+        kind: hostInventoryItem.kind,
+        name: sql<string>`regexp_replace(${hostInventoryItem.path}, '^.*/', '')`,
+        machineCount: sql<number>`cast(count(distinct ${hostInventoryItem.hostId}) as int)`,
+      })
+      .from(hostInventoryItem)
+      .innerJoin(latest, eq(hostInventoryItem.reportId, latest.id))
+      .where(
+        and(
+          eq(hostInventoryItem.exists, true),
+          isNotNull(hostInventoryItem.contentHash)
+        )
+      )
+      .groupBy(
+        hostInventoryItem.tool,
+        hostInventoryItem.kind,
+        sql`regexp_replace(${hostInventoryItem.path}, '^.*/', '')`
+      );
+
+    for (const row of perName) {
+      const group = groups.get(`${row.tool}::${row.kind}::${row.name}`);
+      if (group) {
+        group.machineCount = row.machineCount;
+      }
     }
 
     return [...groups.values()]
