@@ -462,6 +462,11 @@ export class DrizzleFleetRepository implements FleetRepository {
       return { outcome: "already-enrolled" };
     }
 
+    // DoNothing, not DoUpdate. The check above closes the ordinary case, but
+    // two enrolments of the same new machineId arriving together would both
+    // pass it — and an update-on-conflict would let the second overwrite the
+    // first's token, locking out a machine that had just enrolled honestly.
+    // Losing the race is the same answer as finding the row already there.
     const [row] = await this.db
       .insert(host)
       .values({
@@ -472,16 +477,12 @@ export class DrizzleFleetRepository implements FleetRepository {
         firstSeenAt: enrolledAt,
         lastSeenAt: enrolledAt,
       })
-      .onConflictDoUpdate({
-        target: host.machineId,
-        set: {
-          agentTokenHash: tokenHash,
-          enrolledAt,
-          revokedAt: null,
-          revokedBy: null,
-        },
-      })
+      .onConflictDoNothing({ target: host.machineId })
       .returning({ id: host.id });
+
+    if (!row) {
+      return { outcome: "already-enrolled" };
+    }
 
     return { outcome: "enrolled", hostId: row.id };
   }
