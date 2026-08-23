@@ -931,6 +931,77 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
     await harness.resetDatabase();
   });
 
+  it("Given two enrolments of the same new machine arrive together, when both are applied, then only one binds a token", async () => {
+    // The existence check cannot close this on its own: both callers see no
+    // row. An update-on-conflict would let the loser overwrite the winner's
+    // token, locking out a machine that had just enrolled honestly.
+    const [first, second] = await Promise.all([
+      repository.enrolHost({
+        machineId: "racing-machine",
+        tokenHash: "hash-one",
+        enrolledAt: NOW,
+      }),
+      repository.enrolHost({
+        machineId: "racing-machine",
+        tokenHash: "hash-two",
+        enrolledAt: NOW,
+      }),
+    ]);
+
+    const outcomes = [first.outcome, second.outcome].sort();
+    assert.deepEqual(outcomes, ["already-enrolled", "enrolled"]);
+
+    // Exactly one token is live, and it belongs to whoever won.
+    const winner = first.outcome === "enrolled" ? "hash-one" : "hash-two";
+    const loser = winner === "hash-one" ? "hash-two" : "hash-one";
+    assert.ok(await repository.findHostByTokenHash(winner));
+    assert.equal(await repository.findHostByTokenHash(loser), null);
+  });
+
+  it("Given a machine is already enrolled, when enrolment is attempted again, then it is refused and the original token survives", async () => {
+    await repository.enrolHost({
+      machineId: "settled-machine",
+      tokenHash: "original",
+      enrolledAt: NOW,
+    });
+
+    const second = await repository.enrolHost({
+      machineId: "settled-machine",
+      tokenHash: "attacker",
+      enrolledAt: NOW,
+    });
+
+    assert.equal(second.outcome, "already-enrolled");
+    assert.ok(await repository.findHostByTokenHash("original"));
+    assert.equal(await repository.findHostByTokenHash("attacker"), null);
+  });
+
+  it("Given a revoked machine, when it tries to enrol again, then it is refused and stays revoked", async () => {
+    // Revocation must not be liftable by the machine we stopped trusting.
+    const { hostId } = (await repository.enrolHost({
+      machineId: "revoked-machine",
+      tokenHash: "before",
+      enrolledAt: NOW,
+    })) as { outcome: "enrolled"; hostId: string };
+
+    await repository.revokeHost({
+      hostId,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    const retry = await repository.enrolHost({
+      machineId: "revoked-machine",
+      tokenHash: "after",
+      enrolledAt: NOW,
+    });
+
+    assert.equal(retry.outcome, "already-enrolled");
+    const stillRevoked =
+      await repository.findHostByMachineId("revoked-machine");
+    assert.ok(stillRevoked?.revokedAt);
+  });
+
   it("Given machines report different feed versions, when reading the overview, then it names the newest version, not the last one received", async () => {
     // The old query ordered by arrival, so one machine on an ancient feed
     // reporting last made the whole fleet look stale — and blanked the
