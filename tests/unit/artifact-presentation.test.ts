@@ -131,3 +131,19 @@ describe("artifactName", () => {
     assert.equal(artifactName("AGENTS.md"), "AGENTS.md");
   });
 });
+
+describe("artifactName trailing separators", () => {
+  test("ignores a trailing slash rather than yielding an empty name", () => {
+    assert.equal(
+      artifactName("/Users/alice/.claude/skills/podcast/"),
+      "podcast"
+    );
+  });
+
+  test("ignores a trailing backslash too", () => {
+    const windowsPath = ["C:", "Users", "alice", "skills", "podcast", ""].join(
+      "\\"
+    );
+    assert.equal(artifactName(windowsPath), "podcast");
+  });
+});

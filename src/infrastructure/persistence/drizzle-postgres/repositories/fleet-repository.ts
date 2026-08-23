@@ -91,16 +91,60 @@ const REPORTING_WINDOW_MS = 24 * HOUR_MS;
  * each other, let alone with anyone else.
  */
 export function artifactName(path: string): string {
-  const segments = path.split(/[/\\]/);
-  return segments.at(-1) || path;
+  const trimmed = path.replace(/[/\\]+$/, "");
+  const segments = trimmed.split(/[/\\]/);
+  return segments.at(-1) || trimmed || path;
 }
 
 /** The same rule in SQL, for grouping that has to happen in the database. */
 // Backslashes are folded to slashes before taking the last segment: a
 // character class containing a backslash has to survive both the SQL string
 // literal and the regex parser, and chr(92) is unambiguous in a way that
-// escaping is not.
-const SQL_ARTIFACT_NAME = sql`regexp_replace(translate(${hostInventoryItem.path}, chr(92), '/'), '^.*/', '')`;
+// escaping is not. Trailing separators are trimmed first so this and
+// `artifactName` cannot disagree — the grouping now depends on them matching,
+// and a path ending in a slash otherwise yielded "" here and the whole path
+// there, rendering a blank row in the inventory.
+const SQL_ARTIFACT_NAME = sql`regexp_replace(regexp_replace(translate(${hostInventoryItem.path}, chr(92), '/'), '/+$', ''), '^.*/', '')`;
+
+/**
+ * The host columns the console is allowed to see.
+ *
+ * Explicit rather than `select()`, because SELECT * shipped
+ * `agentTokenHash` to every session through /api/fleet and /api/fleet/host.
+ * It is a SHA-256 and grants nothing today — the request path hashes a real
+ * token to look a machine up — but a stored credential has no business in a
+ * response body, and `machineTokenMatches` already exists for anyone who
+ * later wires a hash comparison to a header.
+ */
+const HOST_COLUMNS = {
+  id: host.id,
+  machineId: host.machineId,
+  hostname: host.hostname,
+  platform: host.platform,
+  osRelease: host.osRelease,
+  username: host.username,
+  owner: host.owner,
+  team: host.team,
+  agentVersion: host.agentVersion,
+  firstSeenAt: host.firstSeenAt,
+  lastSeenAt: host.lastSeenAt,
+  revokedAt: host.revokedAt,
+  revokedBy: host.revokedBy,
+  enrolledAt: host.enrolledAt,
+  enrolmentOpen: host.enrolmentOpen,
+} as const;
+
+/** Postgres reports a unique-constraint breach with this code. */
+const PG_UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === PG_UNIQUE_VIOLATION
+  );
+}
 
 /** Written by the ingest endpoint when a check-in is turned away. */
 const CHECK_IN_REJECTED = "Check-in rejected";
@@ -311,7 +355,7 @@ export class DrizzleFleetRepository implements FleetRepository {
 
   async listHostSummaries(): Promise<HostSummary[]> {
     const hosts = await this.db
-      .select()
+      .select(HOST_COLUMNS)
       .from(host)
       .orderBy(desc(host.lastSeenAt));
 
@@ -414,12 +458,18 @@ export class DrizzleFleetRepository implements FleetRepository {
   }
 
   async restoreHost({ hostId }: { hostId: string }): Promise<void> {
-    // The machine keeps the token it was issued: restoring means this server
-    // accepts its reports again. Clearing the credential would strand it —
-    // unable to report, and unable to enrol because its row still exists.
+    // The withdrawn credential is retired with the revocation — a token that
+    // was revoked should never work again — and the machine is opened for one
+    // enrolment so it can come back. Both halves are the operator's act, which
+    // is what makes the credential-less window safe to exist at all.
     await this.db
       .update(host)
-      .set({ revokedAt: null, revokedBy: null })
+      .set({
+        revokedAt: null,
+        revokedBy: null,
+        agentTokenHash: null,
+        enrolmentOpen: true,
+      })
       .where(eq(host.id, hostId));
   }
 
@@ -447,19 +497,46 @@ export class DrizzleFleetRepository implements FleetRepository {
     // unauthenticated request body, so an upsert let anyone holding a code
     // overwrite another machine's token. That locked the real machine out and
     // handed its identity — and the power to resolve its findings — away.
-    // Enrolment CREATES machines; it never re-binds one. A machineId is a
-    // claim in an unauthenticated body, so re-binding let anyone holding a
-    // cohort code — which every machine in that cohort holds by design —
-    // seize an existing machine: the real one is locked out silently, and the
-    // attacker inherits its identity and can resolve its findings. It also
-    // let a revoked machine lift its own revocation, which is precisely the
-    // machine we have decided not to trust.
+    // Enrolment binds a machine that holds no credential. It never takes one
+    // from a machine that does: a machineId is a claim in an unauthenticated
+    // body, so re-binding let anyone holding a cohort code — which every
+    // machine in that cohort holds by design — seize an existing machine,
+    // locking the real one out and inheriting its findings.
     //
-    // Guarded on the row existing, not on it having a token: hosts enrolled
-    // before per-machine tokens have none, and were the least protected.
+    // A revoked machine is refused whatever state its credential is in,
+    // because it is precisely the machine we have decided not to trust and it
+    // must not lift its own revocation. Re-admitting one is Restore, which is
+    // an authenticated operator action and which clears the credential so the
+    // machine enrols afresh.
+    //
+    // An existing machine may bind a credential only through a window an
+    // operator opened for it. "Holds no token" is NOT the same as "is
+    // available": a restored machine, or one predating per-machine tokens,
+    // sits credential-less for as long as it takes to enrol, and treating
+    // that as open let anyone holding a cohort code walk into the slot and
+    // inherit the machine — the takeover this design exists to prevent,
+    // reached through the front door instead of the back.
     const existing = await this.findHostByMachineId(machineId);
     if (existing) {
-      return { outcome: "already-enrolled" };
+      const [rebound] = await this.db
+        .update(host)
+        .set({ agentTokenHash: tokenHash, enrolledAt, enrolmentOpen: false })
+        // Every condition re-checked in the UPDATE, so the window cannot be
+        // consumed twice: two enrolments racing for one open slot both read
+        // it open, and the second finds the predicate false and gets nothing.
+        .where(
+          and(
+            eq(host.id, existing.id),
+            eq(host.enrolmentOpen, true),
+            isNull(host.agentTokenHash),
+            isNull(host.revokedAt)
+          )
+        )
+        .returning({ id: host.id });
+
+      return rebound
+        ? { outcome: "enrolled", hostId: rebound.id }
+        : { outcome: "already-enrolled" };
     }
 
     // DoNothing, not DoUpdate. The check above closes the ordinary case, but
@@ -498,7 +575,7 @@ export class DrizzleFleetRepository implements FleetRepository {
 
   async findHostDetail(hostId: string): Promise<HostDetail | null> {
     const [hostRow] = await this.db
-      .select()
+      .select(HOST_COLUMNS)
       .from(host)
       .where(eq(host.id, hostId))
       .limit(1);
@@ -819,7 +896,11 @@ export class DrizzleFleetRepository implements FleetRepository {
 
     return {
       hostsEnrolled: hosts.length,
-      hostsReporting: hosts.filter((h) => h.lastSeenAt > reportingSince).length,
+      // A machine that has enrolled and never reported is not reporting.
+      // Enrolment stamps lastSeenAt, so the timestamp alone said it was.
+      hostsReporting: hosts
+        .filter((h) => h.enrolledAt === null || h.lastSeenAt > h.enrolledAt)
+        .filter((h) => h.lastSeenAt > reportingSince).length,
       ownersWithOpenFindings: new Set(
         attention.map((row) => row.owner ?? row.hostname)
       ).size,
@@ -1515,19 +1596,20 @@ export class DrizzleFleetRepository implements FleetRepository {
   }
 
   async savePolicy(input: SavePolicyInput): Promise<SavePolicyResult> {
-    // A name collision is a person naming two rules the same thing. Letting
-    // the unique constraint surface as an unhandled 500 turned that into a
-    // server error in the log and "something went wrong" on screen.
-    const [clash] = await this.db
-      .select({ id: policy.id })
-      .from(policy)
-      .where(eq(policy.name, input.name))
-      .limit(1);
-
-    if (clash && clash.id !== input.id) {
-      return { outcome: "name-taken" };
+    // A name collision is a person naming two rules the same thing, not a
+    // server fault. The constraint is what decides — a check-then-insert is a
+    // race two concurrent creates both win, and the second still 500s.
+    try {
+      return await this.writePolicy(input);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return { outcome: "name-taken" };
+      }
+      throw error;
     }
+  }
 
+  private async writePolicy(input: SavePolicyInput): Promise<SavePolicyResult> {
     if (input.id) {
       const [row] = await this.db
         .update(policy)
@@ -1542,7 +1624,10 @@ export class DrizzleFleetRepository implements FleetRepository {
         })
         .where(eq(policy.id, input.id))
         .returning({ id: policy.id });
-      return { outcome: "saved", id: row.id };
+
+      // An id that matches nothing updates nothing; reading .id off the
+      // absent row was an unhandled 500.
+      return row ? { outcome: "saved", id: row.id } : { outcome: "not-found" };
     }
 
     const [row] = await this.db
@@ -1600,7 +1685,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostFinding)
       .innerJoin(latest, eq(hostFinding.reportId, latest.id))
-      .where(eq(hostFinding.suppressed, false));
+      .innerJoin(host, eq(hostFinding.hostId, host.id))
+      // The evaluated count already excludes revoked machines. Without the
+      // same filter here the two measured different fleets, and a policy
+      // whose only violator had been revoked read "0 of 1 passing" while the
+      // Overview said every live machine passed.
+      .where(and(eq(hostFinding.suppressed, false), isNull(host.revokedAt)));
 
     const live = await this.liveSuppressions();
     const machinesByRule = new Map<string, Set<string>>();

@@ -27,7 +27,18 @@ export type Host = {
   /** sha256 of this machine's own reporting token; null before enrolment. */
   agentTokenHash: string | null;
   enrolledAt: Date | null;
+  /** Set by an operator so this machine may bind a new credential, once. */
+  enrolmentOpen: boolean;
 };
+
+/**
+ * A machine as the console is allowed to see it.
+ *
+ * The stored credential hash is not part of it. Typing the difference means a
+ * query that forgets to exclude it fails to compile rather than quietly
+ * shipping it in a response body.
+ */
+export type PublicHost = Omit<Host, "agentTokenHash">;
 
 /**
  * One check-in from an agent. Every report is retained, so the fleet view can

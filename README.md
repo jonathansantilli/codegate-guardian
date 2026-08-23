@@ -93,11 +93,14 @@ Two things that changed meaning:
 - `AGENT_INGEST_TOKEN` no longer authenticates anything. Its presence is what
   says this server accepts enrolments. Rotating it does not affect machines
   that are already enrolled, and does not fix ones that are not.
-- Enrolment **creates** machines; it never re-binds an existing one. A machine
-  that already has a row is refused with `409`. That is what stops anyone
-  holding a cohort code from seizing another machine's identity — and what
-  stops a revoked machine lifting its own revocation. Re-admitting a machine
-  is an operator action: **Restore enrolment** on its page.
+- Enrolment binds a machine that holds no credential, and never takes one from
+  a machine that does. A machine already holding a token, or one that has been
+  revoked, is refused with `409` — that is what stops anyone holding a cohort
+  code from seizing another machine's identity, and what stops a revoked
+  machine lifting its own revocation. Machines upgrading from the shared token
+  hold no credential, so they enrol normally. Re-admitting a revoked machine
+  is an operator action: **Restore enrolment** on its page, which retires the
+  withdrawn credential so the machine enrols afresh.
 
 ## Configuration
 

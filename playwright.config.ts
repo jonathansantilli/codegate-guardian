@@ -106,7 +106,12 @@ export default defineConfig({
   webServer: {
     command: "pnpm build && pnpm start",
     url: `${baseURL}/ping`,
-    reuseExistingServer: true,
+    // Not unconditional `true`: port 3000 is where the dev compose stack runs,
+    // so that quietly pointed a suite which registers operators, mints
+    // enrolment codes and posts agent reports at a real fleet's data. In CI
+    // nothing else binds the port — the workflow no longer starts a server —
+    // so Playwright starts its own and this is safe in both directions.
+    reuseExistingServer: !process.env.CI,
     timeout: 240 * 1000,
     stdout: "pipe",
     stderr: "pipe",

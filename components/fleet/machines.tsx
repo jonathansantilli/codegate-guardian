@@ -50,24 +50,35 @@ type HostSummary = {
 
 type Attention = { hostId: string; severity: string };
 
-type Filter = "all" | HostFreshness | "revoked";
+type Filter = "all" | HostFreshness | "revoked" | "silent";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "online", label: "Reporting" },
   { key: "stale", label: "Stale" },
   { key: "offline", label: "No recent reports" },
+  { key: "silent", label: "Never reported" },
   { key: "revoked", label: "Revoked" },
 ];
 
 /** Rows per page. Enough to work through, few enough to scan. */
 const PAGE_SIZE = 25;
 
-/** Which filter a machine belongs to. Revocation wins over silence. */
+/**
+ * Which filter a machine belongs to.
+ *
+ * The same order the status badge uses, and for the same reason: enrolment
+ * stamps lastSeenAt, so freshness alone counted a machine that had never
+ * checked in among those Reporting — while its own row said "Never reported".
+ */
 function bucketOf(entry: HostSummary): Exclude<Filter, "all"> {
-  return entry.host.revokedAt
-    ? "revoked"
-    : getHostFreshness(new Date(entry.host.lastSeenAt));
+  if (entry.host.revokedAt) {
+    return "revoked";
+  }
+  if (entry.lastCollectedAt === null) {
+    return "silent";
+  }
+  return getHostFreshness(new Date(entry.host.lastSeenAt));
 }
 
 export function MachinesScreen() {

@@ -2,6 +2,7 @@ import type {
   Host,
   InventoryItemKind,
   InventoryScope,
+  PublicHost,
 } from "@/src/domain/fleet/entities/host";
 
 /**
@@ -97,7 +98,7 @@ export type RecordedReport = {
 
 /** A machine plus the headline numbers from its most recent check-in. */
 export type HostSummary = {
-  host: Host;
+  host: PublicHost;
   lastReportId: string | null;
   lastCollectedAt: Date | null;
   itemsTotal: number;
@@ -107,7 +108,7 @@ export type HostSummary = {
 };
 
 export type HostDetail = {
-  host: Host;
+  host: PublicHost;
   lastCollectedAt: Date | null;
   kbVersion: string | null;
   /** What the machine actually carries. A probed path that is not there is not an artifact. */
@@ -330,7 +331,8 @@ export type RecordActivityInput = Omit<ActivityRecord, "id">;
 
 export type SavePolicyResult =
   | { outcome: "saved"; id: string }
-  | { outcome: "name-taken" };
+  | { outcome: "name-taken" }
+  | { outcome: "not-found" };
 
 export type PolicyRecord = {
   id: string;

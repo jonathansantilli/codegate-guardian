@@ -92,6 +92,20 @@
       "when": 1787434114233,
       "tag": "0012_nice_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787477640341,
+      "tag": "0013_wandering_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787477683360,
+      "tag": "0014_absent_vulcan",
+      "breakpoints": true
     }
   ]
 }

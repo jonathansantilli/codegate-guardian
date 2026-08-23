@@ -976,6 +976,145 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
     assert.equal(await repository.findHostByTokenHash("attacker"), null);
   });
 
+  it("Given a machine holding no credential that nobody opened, when it enrols, then it is refused", async () => {
+    // Holding no token is not the same as being available. A restored machine
+    // or one mid-upgrade sits credential-less, and treating that as open let
+    // anyone with a cohort code walk into the slot and inherit the machine.
+    await repository.recordReport(report({ machineId: "unopened-machine" }));
+
+    const result = await repository.enrolHost({
+      machineId: "unopened-machine",
+      tokenHash: "attacker-token",
+      enrolledAt: NOW,
+    });
+
+    assert.equal(result.outcome, "already-enrolled");
+    assert.equal(await repository.findHostByTokenHash("attacker-token"), null);
+  });
+
+  it("Given an operator opened a machine for enrolment, when it enrols, then it binds once and closes behind itself", async () => {
+    // The documented upgrade path, and what migration 0014 does for every
+    // machine that predates per-machine tokens.
+    await repository.recordReport(report({ machineId: "legacy-machine" }));
+    const legacy = await repository.findHostByMachineId("legacy-machine");
+    await repository.restoreHost({ hostId: legacy?.id ?? "" });
+
+    const first = await repository.enrolHost({
+      machineId: "legacy-machine",
+      tokenHash: "legacy-now-has-a-token",
+      enrolledAt: NOW,
+    });
+
+    assert.equal(first.outcome, "enrolled");
+    const bound = await repository.findHostByTokenHash(
+      "legacy-now-has-a-token"
+    );
+    assert.equal(bound?.machineId, "legacy-machine");
+
+    // The window is one-shot: a second caller cannot follow it through.
+    const second = await repository.enrolHost({
+      machineId: "legacy-machine",
+      tokenHash: "second-token",
+      enrolledAt: NOW,
+    });
+    assert.equal(second.outcome, "already-enrolled");
+    assert.equal(await repository.findHostByTokenHash("second-token"), null);
+  });
+
+  it("Given two machines race for one open enrolment window, when both enrol, then only one binds", async () => {
+    await repository.recordReport(report({ machineId: "contested-machine" }));
+    const contested = await repository.findHostByMachineId("contested-machine");
+    await repository.restoreHost({ hostId: contested?.id ?? "" });
+
+    const [a, b] = await Promise.all([
+      repository.enrolHost({
+        machineId: "contested-machine",
+        tokenHash: "token-a",
+        enrolledAt: NOW,
+      }),
+      repository.enrolHost({
+        machineId: "contested-machine",
+        tokenHash: "token-b",
+        enrolledAt: NOW,
+      }),
+    ]);
+
+    assert.deepEqual([a.outcome, b.outcome].sort(), [
+      "already-enrolled",
+      "enrolled",
+    ]);
+  });
+
+  it("Given an operator restores a revoked machine, when it enrols, then it comes back with a new credential", async () => {
+    const { hostId } = (await repository.enrolHost({
+      machineId: "returning-machine",
+      tokenHash: "old-credential",
+      enrolledAt: NOW,
+    })) as { outcome: "enrolled"; hostId: string };
+    await repository.revokeHost({
+      hostId,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    await repository.restoreHost({ hostId });
+
+    // The withdrawn credential must not start working again on its own.
+    assert.equal(await repository.findHostByTokenHash("old-credential"), null);
+
+    const again = await repository.enrolHost({
+      machineId: "returning-machine",
+      tokenHash: "new-credential",
+      enrolledAt: NOW,
+    });
+    assert.equal(again.outcome, "enrolled");
+    assert.ok(await repository.findHostByTokenHash("new-credential"));
+  });
+
+  it("Given a policy whose only violator was revoked, when reading policies, then the live fleet passes", async () => {
+    await repository.savePolicy({
+      name: "Known-malicious content",
+      ruleId: "known-malicious-content",
+      severity: "CRITICAL",
+      enabled: true,
+      createdBy: "operator",
+      now: NOW,
+    });
+    await repository.recordReport(
+      report({ machineId: MACHINE_A, findings: [CRITICAL] })
+    );
+    await repository.recordReport(
+      report({ machineId: MACHINE_B, hostname: "clean", findings: [] })
+    );
+    const hosts = await repository.listHostSummaries();
+    const dirty = hosts.find((h) => h.host.machineId === MACHINE_A);
+    await repository.revokeHost({
+      hostId: dirty?.host.id ?? "",
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
+
+    const [policy] = await repository.listPolicies();
+
+    // Violating and evaluated must measure the same fleet, or the page reads
+    // "0 of 1 passing" while the Overview says every live machine passes.
+    assert.equal(policy.violatingMachines, 0);
+    assert.equal(policy.evaluatedMachines, 1);
+  });
+
+  it("Given a machine that enrolled and never reported, when reading the overview, then it does not count as reporting", async () => {
+    await repository.enrolHost({
+      machineId: "quiet-machine",
+      tokenHash: "quiet",
+      enrolledAt: NOW,
+    });
+
+    const overview = await repository.overview(NOW);
+
+    assert.equal(overview.hostsEnrolled, 1);
+    assert.equal(overview.hostsReporting, 0);
+  });
+
   it("Given a revoked machine, when it tries to enrol again, then it is refused and stays revoked", async () => {
     // Revocation must not be liftable by the machine we stopped trusting.
     const { hostId } = (await repository.enrolHost({
