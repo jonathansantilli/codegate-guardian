@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test as setup } from "@playwright/test";
 
@@ -16,8 +18,37 @@ export const OPERATOR_STATE = path.join(
 );
 
 const EMAIL = process.env.E2E_OPERATOR_EMAIL ?? "e2e-operator@example.test";
-const PASSWORD =
-  process.env.E2E_OPERATOR_PASSWORD ?? "correct-horse-battery-staple";
+const CREDENTIAL_FILE = path.join(
+  process.cwd(),
+  "tests/e2e/.auth/operator-credential.json"
+);
+
+/**
+ * Generated on first use and kept beside the session state, which is
+ * gitignored.
+ *
+ * A committed default would be a known password on a full operator account
+ * for every instance this suite has ever run against, including a dev stack
+ * someone left reachable. Generating it per RUN instead would lock the suite
+ * out of a database an earlier run claimed — so it is generated once, stored
+ * where it is not committed, and reused.
+ */
+function operatorPassword(): string {
+  if (process.env.E2E_OPERATOR_PASSWORD) {
+    return process.env.E2E_OPERATOR_PASSWORD;
+  }
+
+  if (existsSync(CREDENTIAL_FILE)) {
+    return JSON.parse(readFileSync(CREDENTIAL_FILE, "utf8")).password;
+  }
+
+  const password = `e2e-${randomBytes(24).toString("base64url")}`;
+  mkdirSync(path.dirname(CREDENTIAL_FILE), { recursive: true });
+  writeFileSync(CREDENTIAL_FILE, JSON.stringify({ password }), { mode: 0o600 });
+  return password;
+}
+
+const PASSWORD = operatorPassword();
 
 setup("sign in as an operator, bootstrapping if needed", async ({ page }) => {
   await page.goto("/login");

@@ -12,17 +12,27 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-export const user = pgTable("User", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
-  name: text("name"),
-  emailVerified: boolean("emailVerified").notNull().default(false),
-  image: text("image"),
-  isAnonymous: boolean("isAnonymous").notNull().default(false),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-});
+export const user = pgTable(
+  "User",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    email: varchar("email", { length: 64 }).notNull(),
+    password: varchar("password", { length: 64 }),
+    name: text("name"),
+    emailVerified: boolean("emailVerified").notNull().default(false),
+    image: text("image"),
+    isAnonymous: boolean("isAnonymous").notNull().default(false),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    // Sign-in reads the first row for an address, so a second account sharing
+    // one could never authenticate — and registration checked for an existing
+    // account in a separate statement from creating it, which two concurrent
+    // requests both pass. The database settles it.
+    emailKey: unique("User_email_key").on(table.email),
+  })
+);
 
 export type User = InferSelectModel<typeof user>;
 
@@ -64,6 +74,17 @@ export const host = pgTable(
      */
     agentTokenHash: text("agentTokenHash"),
     enrolledAt: timestamp("enrolledAt"),
+    /**
+     * Whether an operator has opened this machine to enrolment.
+     *
+     * Enrolment binds a credential to a machine, so "this row has no
+     * credential" must not by itself mean "anyone with a code may take it".
+     * A machine holding no token — restored, or predating per-machine tokens
+     * — is a slot, and a slot left open is the takeover this whole change
+     * exists to prevent. So the window is one an operator opens deliberately,
+     * for one machine, and enrolling consumes it.
+     */
+    enrolmentOpen: boolean("enrolmentOpen").notNull().default(false),
   },
   (table) => ({
     machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),

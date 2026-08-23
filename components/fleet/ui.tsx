@@ -47,8 +47,15 @@ export const FRESHNESS_TONE: Record<HostFreshness, "ok" | "warn" | "sec"> = {
 export function machineStatus(
   freshness: HostFreshness,
   revokedAt: string | Date | null,
-  /** Null when the machine has enrolled but never sent a report. */
-  lastCollectedAt?: string | Date | null
+  /**
+   * Null when the machine has enrolled but never sent a report.
+   *
+   * Required, deliberately: as an optional parameter a caller that forgot it
+   * silently got the wrong badge, and the machine page showed "Reporting" in
+   * green for a machine the table beside it called "Never reported". Making
+   * it required turns that into a compile error.
+   */
+  lastCollectedAt: string | Date | null
 ): { label: string; tone: "ok" | "warn" | "sec"; color: string } {
   if (revokedAt) {
     return { label: "Revoked", tone: "sec", color: "var(--fg3)" };

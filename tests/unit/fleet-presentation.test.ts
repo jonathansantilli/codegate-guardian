@@ -99,18 +99,36 @@ describe("displayPath", () => {
 
 describe("machineStatus", () => {
   test("a revoked machine reads as revoked, not as merely stale", () => {
-    const status = machineStatus("stale", new Date("2026-08-01T00:00:00Z"));
+    const status = machineStatus(
+      "stale",
+      new Date("2026-08-01T00:00:00Z"),
+      NOW
+    );
     assert.equal(status.label, "Revoked");
   });
 
   test("revocation outranks even a machine still reporting", () => {
     // The last report can be minutes old and the door still closed.
-    assert.equal(machineStatus("online", new Date()).label, "Revoked");
+    assert.equal(machineStatus("online", new Date(), NOW).label, "Revoked");
   });
 
   test("an unrevoked machine reads by how recently it reported", () => {
-    assert.equal(machineStatus("online", null).label, "Reporting");
-    assert.equal(machineStatus("stale", null).label, "Stale");
-    assert.equal(machineStatus("offline", null).label, "No recent reports");
+    assert.equal(machineStatus("online", null, NOW).label, "Reporting");
+    assert.equal(machineStatus("stale", null, NOW).label, "Stale");
+    assert.equal(
+      machineStatus("offline", null, NOW).label,
+      "No recent reports"
+    );
+  });
+});
+
+describe("machineStatus for a machine that has never reported", () => {
+  test("enrolling is not reporting", () => {
+    // Enrolment stamps lastSeenAt, so freshness alone called it healthy.
+    assert.equal(machineStatus("online", null, null).label, "Never reported");
+  });
+
+  test("revocation still outranks it", () => {
+    assert.equal(machineStatus("online", new Date(), null).label, "Revoked");
   });
 });

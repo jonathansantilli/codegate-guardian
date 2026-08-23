@@ -56,6 +56,13 @@ export async function PUT(request: Request) {
     );
   }
 
+  if (saved.outcome === "not-found") {
+    return Response.json(
+      { error: "That policy no longer exists." },
+      { status: 404 }
+    );
+  }
+
   await fleet.recordActivity({
     occurredAt: now,
     actorKind: "person",

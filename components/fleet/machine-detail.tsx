@@ -99,7 +99,8 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
   const { host } = detail;
   const status = machineStatus(
     getHostFreshness(new Date(host.lastSeenAt)),
-    host.revokedAt
+    host.revokedAt,
+    detail.lastCollectedAt
   );
   const critical = detail.findings.filter(
     (f) => f.severity === "CRITICAL"
@@ -539,8 +540,12 @@ function ReportHistory({ reports }: { reports: HostDetail["reports"] }) {
             {/* The stored total counts every path probed, not what was
                 found — so it is labelled for what it is. */}
             <span style={{ flex: 1 }}>{report.itemsTotal} paths checked</span>
+            {/* Toned, not red: this is what that report carried, not something
+                needing attention now. A suppression an operator applied today
+                does not rewrite what a machine reported last week, so the
+                header can honestly read "0 open" beside this. */}
             {report.criticalTotal > 0 ? (
-              <Badge tone="crit">{report.criticalTotal} crit</Badge>
+              <Badge tone="sec">{report.criticalTotal} crit as reported</Badge>
             ) : delta === 0 ? (
               <span style={{ color: "var(--fg3)" }}>no change</span>
             ) : (
@@ -797,7 +802,7 @@ export function MachineHistory({ hostId }: { hostId: string }) {
                 <th>Collected</th>
                 <th>Received</th>
                 <th className="r">Paths checked</th>
-                <th className="r">Findings</th>
+                <th className="r">Findings as reported</th>
                 <th>Carried findings</th>
               </tr>
             </thead>

@@ -97,6 +97,9 @@ jobs:
       # Without this the ingest endpoint is closed, so the agent tests would
       # be asserting the wrong refusal.
       AGENT_INGEST_TOKEN: ci-agent-ingest-token-ci-agent-ingest-token
+      # Pinned so a re-run against the same database can sign in rather than
+      # trying to register an operator that already exists.
+      E2E_OPERATOR_PASSWORD: ci-operator-password-ci-operator-password
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

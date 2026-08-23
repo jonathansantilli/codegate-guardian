@@ -130,7 +130,11 @@ export function FindingsScreen() {
     current
       ? `${API_BASE}/attention?fingerprint=${encodeURIComponent(current.fingerprint)}`
       : null,
-    fetcher
+    fetcher,
+    // Without this the list is empty for the length of each fetch, so
+    // clicking a finding flashed "no machine still carries this" beside a
+    // machine count that rendered immediately.
+    { keepPreviousData: true }
   );
 
   if (isLoading) {

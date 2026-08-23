@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          "That machine is already enrolled. An operator must revoke it before it can enrol again.",
+          "That machine is already enrolled. If it needs a new credential, an operator must restore it — revoking alone does not release the machine id.",
       },
       { status: 409 }
     );
