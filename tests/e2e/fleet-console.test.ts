@@ -329,3 +329,24 @@ test.describe("Feature: claiming an instance needs the deployer's token", () => 
     await expect(page.getByLabel("Setup token")).toHaveCount(0);
   });
 });
+
+test.describe("Feature: light and dark", () => {
+  test("the console follows the machine, and can be told otherwise", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/fleet");
+
+    const root = page.locator("html");
+    await expect(root).toHaveClass(/light/);
+
+    // Three states, so "follow the system" stays reachable once you leave it.
+    const toggle = page.locator("aside .icon-btn");
+    await toggle.click();
+    await expect(root).toHaveClass(/light/);
+    await toggle.click();
+    await expect(root).toHaveClass(/dark/);
+    await toggle.click();
+    await expect(root).toHaveClass(/light/);
+  });
+});

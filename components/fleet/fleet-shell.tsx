@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * The Guardian application shell: a 240px rail, a brand block that lines up
@@ -181,6 +182,7 @@ export function FleetShell({
               Signed in
             </span>
           </div>
+          <ThemeToggle />
         </div>
       </aside>
 
