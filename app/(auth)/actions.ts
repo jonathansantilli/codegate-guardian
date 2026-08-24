@@ -77,10 +77,14 @@ export const register = async (
       return { status: "user_exists" } as RegisterActionState;
     }
 
-    // The first account bootstraps the instance; after that, creating one is
-    // an operator's job. Left open, reaching the port was one POST away from
-    // full console authority — every machine, the fleet export, and minting
-    // enrolment codes.
+    // The first account bootstraps the instance. Left open, reaching the port
+    // was one POST away from full console authority — every machine, the fleet
+    // export, and minting enrolment codes.
+    //
+    // The signed-in branch below is not reachable through the UI: this version
+    // has one operator, and proxy.ts sends a signed-in visitor away from
+    // /register. It stays as the guard it is, so that if an affordance to add
+    // an operator is ever built, the action already requires a session.
     //
     // These checks live here rather than in the proxy's public-path list: a
     // server action is dispatched by its id, not by the path it was posted
