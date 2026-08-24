@@ -38,6 +38,5 @@ describe("Feature: UserRepository (Drizzle-Postgres)", () => {
     assert.equal(users.length, 1);
     assert.equal(users[0].email, "persisted@example.com");
     assert.equal(users[0].password, "hashed:pw");
-    assert.equal(users[0].isAnonymous, false);
   });
 });

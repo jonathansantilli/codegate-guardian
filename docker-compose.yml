@@ -1,7 +1,9 @@
+name: codegate-guardian
+
 services:
   app:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
       target: runner
     image: codegate-guardian:local
@@ -28,7 +30,7 @@ services:
 
   migrate:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
       target: migrate
     image: codegate-guardian-migrate:local
@@ -48,8 +50,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+    # Loopback only. This database holds the fleet inventory and every
+    # machine's token hash, and the compose credentials are the well-known
+    # postgres/postgres — publishing it on 0.0.0.0 would put all of that on
+    # the network. Use `docker compose exec postgres psql -U postgres` to
+    # reach it, or change this to "5432:5432" if you really need a host port.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

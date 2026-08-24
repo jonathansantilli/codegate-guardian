@@ -37,12 +37,16 @@ tooling and its findings, which is worth protecting on its own.
   the port is the whole of authentication. Set this before the first start;
   leaving it unset means the instance cannot be claimed at all, which is the
   safe way to be wrong. Registration closes for good once an operator exists.
-- **`AGENT_INGEST_TOKEN` opens enrolment.** Its absence closes the ingest
-  endpoint entirely. Rotate it by restarting with a new value; machines that
-  have already enrolled keep reporting with their own per-machine tokens.
+- **`AGENT_INGEST_TOKEN` opens enrolment.** Its absence closes enrolment: no
+  new machine can join. It does not close ingest — machines that have already
+  enrolled keep reporting with their own per-machine tokens, which is what
+  makes rotating it safe. Rotate by restarting with a new value.
 - **Each machine reports with its own token.** A report is attributed to the
-  machine whose token signed it, never to the `machineId` in the payload, so a
-  compromised agent cannot resolve or forge another machine's findings.
+  machine whose token authenticated it, never to the `machineId` in the
+  payload, so a compromised agent cannot resolve or forge another machine's
+  findings. The token is a bearer credential in an `Authorization` header —
+  nothing is cryptographically signed, so treat the token as the secret it is
+  and serve the console over TLS.
 - **Revoke a machine from Access** when a laptop is lost or rebuilt. A revoked
   token is refused at ingest and the rejection is recorded.
 - **Serve it over TLS.** Session cookies and agent tokens both cross the wire;

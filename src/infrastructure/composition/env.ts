@@ -62,12 +62,6 @@ const envSchema = z.object({
    * the alternative is an open door on a fleet security console.
    */
   SETUP_TOKEN: optionalNonEmpty,
-
-  // Telemetry
-  OTEL_EXPORTER_OTLP_ENDPOINT: optionalNonEmpty,
-
-  // Scanner CLI
-  CODEGATE_HOME: optionalNonEmpty,
 });
 
 export type Env = z.infer<typeof envSchema>;

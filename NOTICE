@@ -1,0 +1,36 @@
+CodeGate Guardian
+Copyright (c) 2026 Jonathan Santilli
+
+This product includes software developed at Vercel, Inc.
+
+Portions of this repository derive from the Vercel AI Chatbot template
+(https://github.com/vercel/ai-chatbot), Copyright 2024 Vercel, Inc.,
+licensed under the Apache License, Version 2.0. A copy of that licence is
+included as LICENSE-APACHE-2.0.
+
+Those portions are used and redistributed under Apache-2.0. Everything
+written for CodeGate Guardian is licensed under the MIT License, in LICENSE.
+
+Significant changes from the upstream template
+----------------------------------------------
+
+The chat product the template exists to provide has been removed in its
+entirety — the conversation UI, the AI SDK integration and every model
+provider, the document/artifact/suggestion/vote features, the resumable
+stream infrastructure, and the eight database tables behind them. Guardian
+calls no language model and holds no conversation.
+
+What remains in its place is a fleet reporting console: an ingest endpoint
+that receives signed-in-machine reports from the `codegate` agent, a derived
+finding lifecycle, per-machine authentication tokens, and the operator
+console that displays them.
+
+Files with material upstream lineage at the time of writing:
+
+  lib/db/migrations/0000_initial.sql   the template's original schema, kept so
+                                       migration history stays replayable
+  app/globals.css                      Tailwind layer and theme scaffolding
+  biome.jsonc                          linter configuration
+  playwright.config.ts                 end-to-end test configuration
+  next.config.ts                       framework configuration
+  app/(auth)/                          Auth.js credentials-provider structure

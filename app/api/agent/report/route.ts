@@ -13,10 +13,11 @@ import { getContainer } from "@/src/infrastructure";
 
 // Agent check-in endpoint.
 //
-// Authenticated by a shared bearer token rather than a user session: the
-// caller is a machine, not a person. The response carries a policy document
-// so that pushing policy to machines later needs no new connectivity —
-// agents already poll this endpoint and read what comes back.
+// Authenticated by the reporting machine's own bearer token rather than a
+// user session: the caller is a machine, not a person. The response is an
+// acknowledgement and nothing more. This server issues no instructions to a
+// machine, so there is deliberately no field here an agent is expected to
+// act on.
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
@@ -94,6 +95,9 @@ export async function POST(request: Request) {
     // when nothing is arriving, so it is recorded rather than dropped: the
     // console can then say which machines tried and why they were turned away.
     await container.ports.fleet.recordRejectionThrottled({
+      // Which message, not whether to accept: a machine already enrolled
+      // reports with its own token, and does so whether or not an ingest
+      // token is currently configured. AGENT_INGEST_TOKEN gates enrolment.
       reason: container.env.AGENT_INGEST_TOKEN
         ? REJECTION_INVALID_TOKEN
         : REJECTION_NO_TOKEN,
@@ -168,10 +172,30 @@ export async function POST(request: Request) {
       findings: payload.findings?.map(toFindingInput),
     });
 
+    // A hostname is self-reported: the agent reads it off the machine, and a
+    // compromised one can claim any string, including another machine's. The
+    // report itself is safe — attribution comes from the token — but the
+    // console displays machines BY hostname, so a silent rename lets one
+    // machine wear another's name in the list an operator triages by.
+    // Renaming is legitimate (people rename laptops), so it is recorded
+    // rather than refused.
+    if (reporting.hostname !== payload.host.hostname) {
+      await container.ports.fleet.recordActivity({
+        occurredAt: receivedAt,
+        actorKind: "agent",
+        actorName: reporting.hostname,
+        action: "Changed its reported hostname",
+        target: `${reporting.hostname} → ${payload.host.hostname}`,
+        result: "Recorded",
+        apiCall: "POST /api/agent/report",
+      });
+    }
+
     await container.ports.fleet.recordActivity({
       occurredAt: receivedAt,
       actorKind: "agent",
-      actorName: payload.host.hostname,
+      // The name the token resolved to, not the one the payload claimed.
+      actorName: reporting.hostname,
       action: "Reported inventory",
       target: `${payload.inventory.items.length} artifacts · ${payload.findings?.length ?? 0} findings`,
       result: "Accepted",
@@ -183,9 +207,6 @@ export async function POST(request: Request) {
       reportId,
       itemsAccepted: payload.inventory.items.length,
       findingsAccepted: payload.findings?.length ?? null,
-      // Reserved for the policy phase. Agents should apply what they find here
-      // and treat an empty rule set as "no policy configured".
-      policy: { version: null, rules: [] },
     });
   } catch (error) {
     console.error("Agent report ingest failed:", error);

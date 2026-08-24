@@ -1,171 +1,82 @@
 # Testing
 
-The project runs three test tiers. CI runs all three on every push.
+Three layers, each with a different question to answer and a different cost.
 
-| Tier | Runner | Script | Fixture source | Typical duration |
+| Layer | Runner | Command | What it runs against | Cost |
 |---|---|---|---|---|
-| Unit | `node:test` via `tsx` | `pnpm test:unit` | Hand-built fakes, no I/O | Seconds |
-| Integration | `node:test` + testcontainers | `pnpm test:integration` | Real Postgres in a throwaway Docker container | Tens of seconds to minutes |
-| E2E | Playwright | `pnpm test:e2e` | Full Next.js dev server (or docker-compose stack in CI) | Minutes |
+| Unit | `node:test` via `tsx` | `pnpm test:unit` | Pure functions, no I/O | Under a second |
+| Integration | `node:test` + testcontainers | `pnpm test:integration` | A real Postgres in a throwaway container | Tens of seconds |
+| End-to-end | Playwright | `pnpm test:e2e` | The built app in a browser | A minute or two |
 
-`pnpm test` runs all three in order.
+`pnpm test` runs all three in that order.
 
-## Prerequisites
+## Unit
 
-- Node.js 20+
-- pnpm 10+
-- Docker Desktop or an equivalent (required for integration + E2E tiers)
+`tests/unit/**/*.test.ts`. These cover the rules that decide things: severity
+ordering, finding presentation, CSV escaping, setup-token comparison, machine
+token minting, env parsing. Nothing here touches a database or a network — if
+a test needs either, it belongs one layer down.
 
-## Running locally
+## Integration
 
-### Unit tests (fastest)
-
-```bash
-pnpm test:unit
-# watch mode:
-pnpm test:unit:watch
-# with branch coverage:
-pnpm test:unit:coverage
-```
-
-Unit tests live under `tests/unit/` and `tests/fakes/`. They cover the
-domain and application layers — pure logic, no I/O. The test files are
-plain `node:test` suites with `describe` / `it`.
-
-### Integration tests
-
-```bash
-pnpm test:integration
-```
-
-Each integration test file boots its own testcontainer(s) in
-`beforeAll` and tears them down in `afterAll`. Between individual tests,
-state is reset with lightweight helpers (e.g. `harness.resetDatabase()`
-truncates every table rather than re-running migrations).
-
-The canonical Postgres harness lives at
-`tests/helpers/testcontainer-pg.ts`:
+`tests/integration/**/*.test.ts`, against a real Postgres started by
+testcontainers. `tests/helpers/testcontainer-pg.ts` starts one container per
+test file and truncates between tests: container startup is expensive,
+truncation is cheap.
 
 ```ts
-import {
-  type PostgresHarness,
-  startPostgresHarness,
-} from "@/tests/helpers/testcontainer-pg";
-
-let harness: PostgresHarness;
-
-before(async () => { harness = await startPostgresHarness(); });
+const harness = await startPostgresHarness();
 after(async () => { await harness.stop(); });
 beforeEach(async () => { await harness.resetDatabase(); });
 ```
 
-Add a similar helper per external dependency as adapters arrive. One
-container per test file, not per test — container startup is expensive,
-truncation is cheap.
+This layer is where the derived finding lifecycle is proven — that a later
+report omitting a finding resolves it, and that an inventory-only report
+resolves nothing. Those behaviours depend on real SQL ordering and cannot be
+faked convincingly.
 
-### E2E tests
+Docker must be running. On a cold machine, `docker pull postgres:16-alpine`
+first so the first test does not time out pulling an image.
+
+## End-to-end
+
+`tests/e2e/**/*.test.ts`. Playwright builds the app and starts it itself
+(`webServer` in `playwright.config.ts`), so do not have a dev server on the
+same port when running it.
+
+`operator.setup.ts` runs first and signs in, storing session state the other
+specs reuse. On an unclaimed instance it registers the first operator, which
+needs `SETUP_TOKEN` in the environment of the test process — not just the
+app's. The password it uses is generated once and kept in the gitignored
+`tests/e2e/.auth/operator-credential.json`.
+
+Running locally against the compose stack:
 
 ```bash
-pnpm test:e2e
+export POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/postgres
+export SETUP_TOKEN=<anything>
+export AGENT_INGEST_TOKEN=<anything>
+export AUTH_SECRET=<anything>
+CI=1 pnpm test:e2e
 ```
 
-Playwright starts `pnpm dev` automatically (see `playwright.config.ts`
-`webServer` block) and hits `http://localhost:3000`. Environment
-variables come from `.env.local`.
+`CI=1` matters: without it Playwright reuses an existing server, which points
+the suite — one that registers operators, mints enrolment codes and posts
+agent reports — at whatever is already running on port 3000.
 
-For a faster inner loop during E2E development:
+This layer carries the security regressions. `fleet-console.test.ts` pins the
+attacks that were once possible: a machine claiming another machine's
+`machineId` to resolve its findings, enrolment seizing a machine that already
+exists, and unauthenticated access to every fleet route. Those tests exist
+because each one was a real hole; treat a failure there as a security
+regression, not a flaky test.
 
-```bash
-pnpm dev &                         # start the server once
-pnpm exec playwright test --ui     # interactive runner
-```
-
-Playwright tests live under `tests/e2e/` and follow the pattern
-`*.test.ts`. See `tests/pages/` and `tests/prompts/` for shared page
-objects and prompt helpers.
-
-## Writing tests
-
-### BDD scenario naming
-
-Test names follow a "Given / When / Then" phrasing — the §4 feature
-preservation table in `docs/decouple-vercel.md` is the contract, and
-test names make the link explicit:
-
-```ts
-test.describe("Feature: proxy middleware — liveness", () => {
-  test(
-    "Given a GET /ping request, when no auth exists, then /ping responds 200",
-    async () => { … },
-  );
-});
-```
-
-Each PR that adds or changes a feature updates its row in
-`docs/feature-coverage.md` (status column, current-coverage column).
-
-### Using the fake container for unit tests
-
-Use-case tests should construct a fake `ApplicationContainer`:
-
-```ts
-import { buildFakeContainer } from "@/tests/helpers/container";
-
-const container = buildFakeContainer({
-  env: { RATE_LIMITER_DRIVER: "in-memory" },
-});
-```
-
-As phases land, the `tests/fakes/` directory accumulates port fakes
-(e.g. `tests/fakes/persistence/in-memory-user-repository.ts`). Wire them
-into `buildFakeContainer` through an overrides argument — never mutate
-the real adapter.
-
-### Coverage expectations
-
-| Layer | Expectation |
-|---|---|
-| `src/domain/**` | ≥95% branch coverage (unit-only) |
-| `src/application/**` | ≥95% branch coverage (unit-only) |
-| `src/infrastructure/**` | Integration-covered; unit coverage optional |
-| React / Next.js route handlers | E2E-covered; unit coverage optional |
-
-The `pnpm test:unit:coverage` script runs `c8` scoped to domain + application.
-
-## Debugging
-
-### Integration test hangs
+## Troubleshooting
 
 - Docker daemon not running — start Docker Desktop.
-- Old containers holding ports — `docker ps | grep codegate` and remove
-  stale containers.
-- Image pull timeout on cold machine — run `docker pull
-  postgres:16-alpine` up front.
-
-### Playwright flake
-
-- `trace: "retain-on-failure"` in `playwright.config.ts` saves traces
-  for failed runs under `test-results/`. Open with `pnpm exec playwright
-  show-trace path/to/trace.zip`.
-- Streaming-related flake: assertions on streamed content should use
-  `toBeVisible({ timeout: 30_000 })` — the AI response can take several
-  seconds.
-
-### `tsx --test` resolution quirks
-
-- Path aliases (`@/…`) work thanks to `tsconfig.json` `paths`. If a
-  test imports a `.ts` file that imports another via `./name` without
-  extension, it works; adding an explicit `.js` extension (Node ESM
-  convention) breaks inside `tsx --test`.
-- Don't use default exports for test modules; `node:test` picks up
-  `describe` / `it` / `before` / `after` via named imports.
-
-## Adding a new BDD scenario
-
-1. Find the feature row in `docs/feature-coverage.md`.
-2. Write the test in the right tier (unit / integration / E2E).
-3. Name it `Given … When … Then …`.
-4. Update the row's status in `docs/feature-coverage.md` from ❌/🟡 to
-   ✅ in the same PR.
-5. If the scenario depends on a port that doesn't exist yet, leave the
-   row as a gap and note the phase that will close it.
+- Old containers holding ports — `docker ps | grep codegate` and remove them.
+- `port 3000 is already used` from Playwright — a dev server is running; stop
+  it, or the suite will refuse rather than pollute it.
+- E2E setup fails to sign in on a database that already has a different
+  operator — registration closes permanently behind the first account, so
+  either use that account's credential or reset the database.

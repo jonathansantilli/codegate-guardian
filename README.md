@@ -1,5 +1,3 @@
-![CodeGate Guardian](docs/image/codegate-guardian.png)
-
 # CodeGate Guardian
 
 Guardian is a self-hosted console for seeing what AI tooling your developers
@@ -44,7 +42,7 @@ openssl rand -hex 32              # → AGENT_INGEST_TOKEN
 # Claims the instance — you will be asked for it when you register
 openssl rand -hex 32              # → SETUP_TOKEN
 
-docker compose -f docker/docker-compose.yml up --build
+docker compose up --build
 ```
 
 ### First run, step by step
@@ -67,9 +65,10 @@ docker compose -f docker/docker-compose.yml up --build
    anything found on it.
 
 **All three are required.** `AUTH_SECRET` signs sessions. Without
-`AGENT_INGEST_TOKEN` the ingest endpoint is closed: enrolment answers 503, and
-the console's overview tells you so rather than sitting empty and looking
-healthy. `SETUP_TOKEN` is what claims the instance.
+`AGENT_INGEST_TOKEN` enrolment is closed: it answers 503, no new machine can
+join, and the console's overview tells you so rather than sitting empty and
+looking healthy. Machines already enrolled keep reporting regardless — they
+authenticate with their own tokens. `SETUP_TOKEN` is what claims the instance.
 
 **Why a setup token.** A fresh install has to let somebody in to become the
 first operator, and until that happens, reaching the port is the whole of
@@ -164,7 +163,7 @@ longer reach. To get it back on a local stack:
 
 ```bash
 pnpm fresh                                              # drops the database
-docker compose -f docker/docker-compose.yml up -d --build   # rebuilds the schema
+docker compose up -d --build   # rebuilds the schema
 ```
 
 Then http://localhost:3000 asks for `SETUP_TOKEN` again. `pnpm fresh` refuses

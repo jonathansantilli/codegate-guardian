@@ -26,7 +26,6 @@ yarn-error.log*
 .vscode/
 next-env.d.ts
 tsconfig.tsbuildinfo
-local-models.config.json
 
 # Local data directory
 /data/
@@ -35,8 +34,8 @@ local-models.config.json
 *.mov
 *.mp4
 
-# Project docs to keep local only
-docs/codegate-guardian-hackathon-handoff.md
-docs/codegate-guardian-tasks.md
+# Working notes kept out of the repository
 docs/plans/
+docs/*-handoff.md
+docs/*-tasks.md
 tests/e2e/.auth/

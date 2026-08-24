@@ -44,7 +44,7 @@ try {
 } catch {
   console.error(
     `No container named "${CONTAINER}". Start the stack first:\n` +
-      "  docker compose -f docker/docker-compose.yml up -d"
+      "  docker compose up -d"
   );
   process.exit(1);
 }
@@ -158,7 +158,7 @@ psql("drop schema public cascade; create schema public;");
 psql("drop schema if exists drizzle cascade;");
 
 console.log("Done. Now:");
-console.log("  1. docker compose -f docker/docker-compose.yml up -d --build");
+console.log("  1. docker compose up -d --build");
 console.log("     (the migrate step rebuilds the schema)");
 console.log(
   "  2. open http://localhost:3000 — it will ask for your SETUP_TOKEN"
