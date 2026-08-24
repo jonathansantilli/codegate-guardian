@@ -160,6 +160,13 @@ export const ICONS: Record<string, ReactNode> = {
       <path d="M8 20h8M12 16v4" />
     </>
   ),
+  signOut: (
+    <>
+      <path d="M15 17l5-5-5-5" />
+      <path d="M20 12H9" />
+      <path d="M12 20H6a2 2 0 01-2-2V6a2 2 0 012-2h6" />
+    </>
+  ),
 };
 
 export function Ic({
