@@ -127,6 +127,20 @@ Two things that changed meaning:
   is an operator action: **Restore enrolment** on its page, which retires the
   withdrawn credential so the machine enrols afresh.
 
+## What it talks to
+
+Postgres, and nothing else. There is no hosted database, no analytics, no
+error reporting and no external API — the compose stack is the whole system,
+and the container holds one outbound connection, to its own database.
+Next.js's anonymous telemetry is disabled in the `dev`, `build` and `start`
+scripts and in every stage of the Dockerfile, so no build reports anywhere
+either.
+
+Fonts are the one build-time exception: `next/font/google` downloads Geist at
+**build** time and self-hosts the files in the image, so a running instance
+fetches nothing from Google — but the machine doing the build needs to reach
+`fonts.googleapis.com` once.
+
 ## Configuration
 
 Everything else has a working default; see `.env.example` for the full list.
