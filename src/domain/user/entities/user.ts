@@ -6,9 +6,7 @@ export type User = {
   email: string;
   password: string | null;
   name: string | null;
-  emailVerified: boolean;
   image: string | null;
-  isAnonymous: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
