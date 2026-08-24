@@ -7,7 +7,7 @@ import useSWR from "swr";
 import { API_BASE } from "@/lib/security/fleet-api";
 import { fetcher } from "@/lib/utils";
 import { Ic } from "./icons";
-import { ThemeToggle } from "./theme-toggle";
+import { OperatorBadge } from "./operator-badge";
 
 /**
  * The Guardian application shell: a 240px rail, a brand block that lines up
@@ -162,28 +162,7 @@ export function FleetShell({
           })}
         </nav>
 
-        <div className="side-f">
-          <div className="avatar">OP</div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              lineHeight: 1.2,
-              minWidth: 0,
-            }}
-          >
-            <span
-              className="trunc"
-              style={{ fontSize: "12.5px", fontWeight: 500 }}
-            >
-              Operator
-            </span>
-            <span style={{ fontSize: "11px", color: "var(--fg3)" }}>
-              Signed in
-            </span>
-          </div>
-          <ThemeToggle />
-        </div>
+        <OperatorBadge />
       </aside>
 
       <div className="main">

@@ -341,12 +341,31 @@ test.describe("Feature: light and dark", () => {
     await expect(root).toHaveClass(/light/);
 
     // Three states, so "follow the system" stays reachable once you leave it.
-    const toggle = page.locator("aside .icon-btn");
+    // By label, not by class: the rail footer also holds the sign-out button.
+    const toggle = page.getByRole("button", { name: /^Theme/ });
     await toggle.click();
     await expect(root).toHaveClass(/light/);
     await toggle.click();
     await expect(root).toHaveClass(/dark/);
     await toggle.click();
     await expect(root).toHaveClass(/light/);
+  });
+});
+
+test.describe("Feature: signing out", () => {
+  test("an operator can leave, and the console closes behind them", async ({
+    page,
+  }) => {
+    await page.goto("/fleet");
+    // The rail names who is signed in, so an acknowledgement recorded here is
+    // attributable to a person rather than to whoever last used the browser.
+    await expect(page.locator("aside .side-f")).toContainText("@");
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/login/);
+
+    // And the session is really gone, not just the page.
+    await page.goto("/fleet");
+    await expect(page).toHaveURL(/\/login/);
   });
 });

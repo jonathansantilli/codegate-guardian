@@ -152,6 +152,20 @@ own bearer token rather than a session cookie.
 reaches the port first. Registration closes behind them: after that only a
 signed-in operator can create an account.
 
+### Starting over
+
+Once you have registered, the console is claimed and the sign-up form stops
+asking for the setup token — so the first-run path is the one you can no
+longer reach. To get it back on a local stack:
+
+```bash
+pnpm fresh                                              # drops the database
+docker compose -f docker/docker-compose.yml up -d --build   # rebuilds the schema
+```
+
+Then http://localhost:3000 asks for `SETUP_TOKEN` again. `pnpm fresh` refuses
+to run against anything that does not look like a local stack.
+
 ## Development
 
 ```bash
