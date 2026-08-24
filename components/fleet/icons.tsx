@@ -143,6 +143,23 @@ export const ICONS: Record<string, ReactNode> = {
       <rect height="6" rx="1.5" width="16" x="4" y="14" />
     </>
   ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" />
+    </>
+  ),
+  moon: (
+    <>
+      <path d="M20 13.5A8 8 0 1110.5 4a6.5 6.5 0 009.5 9.5z" />
+    </>
+  ),
+  system: (
+    <>
+      <rect height="12" rx="2" width="18" x="3" y="4" />
+      <path d="M8 20h8M12 16v4" />
+    </>
+  ),
 };
 
 export function Ic({
