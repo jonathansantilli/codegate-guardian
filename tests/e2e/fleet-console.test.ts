@@ -300,6 +300,10 @@ test.describe("Feature: registration closes behind the first operator", () => {
     // The setup project has already registered the operator, so this instance
     // is claimed. Reaching the port must not be one POST from full authority.
     await page.goto("/register");
+    // The refusal is reported by a client-side toast, so the form has to have
+    // hydrated before the click — otherwise this submits as a plain POST and
+    // the message never renders.
+    await page.waitForLoadState("networkidle");
     await page
       .getByPlaceholder("you@someo.ne")
       .fill(`refused-${Date.now()}@example.test`);
@@ -308,5 +312,20 @@ test.describe("Feature: registration closes behind the first operator", () => {
 
     await expect(page.getByText(/already has an operator/)).toBeVisible();
     await expect(page).toHaveURL(/\/register/);
+  });
+});
+
+test.describe("Feature: claiming an instance needs the deployer's token", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("the setup token field is not offered once an operator exists", async ({
+    page,
+  }) => {
+    // The setup project has already claimed this instance, so the field must
+    // be gone — offering it would invite guessing at a token that no longer
+    // opens anything.
+    await page.goto("/register");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByLabel("Setup token")).toHaveCount(0);
   });
 });

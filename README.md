@@ -41,16 +41,27 @@ openssl rand -base64 32           # → AUTH_SECRET
 # Without this, no machine can report in
 openssl rand -hex 32              # → AGENT_INGEST_TOKEN
 
+# Claims the instance — you will be asked for it when you register
+openssl rand -hex 32              # → SETUP_TOKEN
+
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Open http://localhost:3000, register an operator, and the console asks you to
-connect your first machine.
+Open http://localhost:3000, register the first operator with the setup token,
+and the console asks you to connect your first machine.
 
-**Both variables are required.** `AUTH_SECRET` signs sessions. Without
+**All three are required.** `AUTH_SECRET` signs sessions. Without
 `AGENT_INGEST_TOKEN` the ingest endpoint is closed: enrolment answers 503, and
 the console's overview tells you so rather than sitting empty and looking
-healthy.
+healthy. `SETUP_TOKEN` is what claims the instance.
+
+**Why a setup token.** A fresh install has to let somebody in to become the
+first operator, and until that happens, reaching the port is the whole of
+authentication — the compose stack publishes on `0.0.0.0:3000`, so on a
+networked host that window belongs to whoever finds it first. The token means
+it belongs to whoever deployed it. Registration closes behind the first
+operator; after that only a signed-in operator can create an account, and the
+token is no longer used.
 
 ## Enrolling a machine
 
@@ -110,6 +121,7 @@ Everything else has a working default; see `.env.example` for the full list.
 |---|---|
 | `AUTH_SECRET` | **Required.** Signs sessions. |
 | `AGENT_INGEST_TOKEN` | **Required to accept agents.** Its presence is what opens enrolment. |
+| `SETUP_TOKEN` | **Required to claim a fresh instance.** Unset means it cannot be claimed. |
 | `POSTGRES_URL` | Any standard-wire-protocol Postgres. |
 | `APP_URL` | The absolute URL this instance is served from. |
 | `OBJECT_STORE_DRIVER` | `filesystem` (default) or `s3`. |
@@ -120,12 +132,10 @@ There is no anonymous access. An unauthenticated browser is sent to `/login`;
 an unauthenticated API call is answered `401`. Agents authenticate with their
 own bearer token rather than a session cookie.
 
-**The first person to register becomes the operator**, and registration closes
-behind them — after that, only a signed-in operator can create an account.
-Note the window this leaves: between `docker compose up` and you registering,
-whoever reaches the port first claims the instance. The compose stack binds
-`0.0.0.0:3000`, so put it behind your network controls, or register
-immediately after starting it.
+**The first person to register becomes the operator**, and must present
+`SETUP_TOKEN` to do it — so a networked instance cannot be claimed by whoever
+reaches the port first. Registration closes behind them: after that only a
+signed-in operator can create an account.
 
 ## Development
 

@@ -100,6 +100,8 @@ jobs:
       # Pinned so a re-run against the same database can sign in rather than
       # trying to register an operator that already exists.
       E2E_OPERATOR_PASSWORD: ci-operator-password-ci-operator-password
+      # The suite claims a fresh CI database as its first operator.
+      SETUP_TOKEN: ci-setup-token-ci-setup-token-ci-setup-token
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -126,6 +128,34 @@ jobs:
       # well is what made this job abort before any test ran.
       - name: Run E2E
         run: pnpm test:e2e
+
+      # The suite runs against `next start`, which serves from .next/ — where
+      # static assets always are. The image does NOT: docker/Dockerfile copies
+      # .next/standalone, .next/static and public in as three separate layers,
+      # and the standalone bundle contains neither of the last two. If those
+      # COPY lines drift, or a Next upgrade changes what standalone includes,
+      # every JS chunk 404s: pages still render, /ping still answers 200, and
+      # nothing on the page works because React never hydrates. `next start`
+      # cannot catch that, so this asserts it directly against the artefact
+      # the image actually ships.
+      - name: Smoke the standalone bundle the image ships
+        run: |
+          set -euo pipefail
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          PORT=3001 node .next/standalone/server.js &
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:3001/ping >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://localhost:3001/ping | grep -qx pong
+          curl -fsS http://localhost:3001/login >/dev/null
+          # The one assertion `next start` can never make: a real hashed chunk,
+          # served from the copied-in static directory.
+          chunk=$(ls .next/static/chunks | head -1)
+          curl -fsS "http://localhost:3001/_next/static/chunks/$chunk" >/dev/null
+          echo "standalone bundle serves its own static assets"
+
       - uses: actions/upload-artifact@v4
         if: always() && !cancelled()
         with:
