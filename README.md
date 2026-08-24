@@ -47,8 +47,23 @@ openssl rand -hex 32              # → SETUP_TOKEN
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Open http://localhost:3000, register the first operator with the setup token,
-and the console asks you to connect your first machine.
+### First run, step by step
+
+1. **Open http://localhost:3000.** You land on the sign-in page; there are no
+   accounts yet, so follow "No account? Sign up".
+2. **Create the first operator.** The form asks for an email, a password, and
+   the **setup token** — the `SETUP_TOKEN` you generated above. That token is
+   what makes this account yours rather than whoever else can reach the port.
+3. **Registration closes behind you.** The setup-token field disappears, and
+   from then on only a signed-in operator can create an account.
+4. **Generate an enrolment code** under **API & access**.
+5. **Connect a machine**, using the code:
+   ```bash
+   npx codegate-ai enrol --server http://localhost:3000 --code FLEET-XXXX-XXXX
+   npx codegate-ai report
+   ```
+6. The machine appears under **Machines**, with everything it carries and
+   anything found on it.
 
 **All three are required.** `AUTH_SECRET` signs sessions. Without
 `AGENT_INGEST_TOKEN` the ingest endpoint is closed: enrolment answers 503, and
