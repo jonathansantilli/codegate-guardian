@@ -7,12 +7,15 @@ export function AuthForm({
   action,
   children,
   defaultEmail = "",
+  setupTokenField,
 }: {
   action: NonNullable<
     string | ((formData: FormData) => void | Promise<void>) | undefined
   >;
   children: React.ReactNode;
   defaultEmail?: string;
+  /** Rendered between the password and the submit; see app/(auth)/actions.ts. */
+  setupTokenField?: React.ReactNode;
 }) {
   return (
     <Form action={action} className="flex flex-col gap-4">
@@ -46,6 +49,8 @@ export function AuthForm({
           type="password"
         />
       </div>
+
+      {setupTokenField}
 
       {children}
     </Form>

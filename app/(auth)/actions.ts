@@ -2,7 +2,14 @@
 
 import { z } from "zod";
 
-import { createFirstUser, createUser, getUser } from "@/lib/db/queries";
+import {
+  createFirstUser,
+  createUser,
+  getUser,
+  hasAnyUser,
+} from "@/lib/db/queries";
+import { isValidSetupToken } from "@/lib/security/setup-token";
+import { getContainer } from "@/src/infrastructure";
 
 import { signIn } from "./auth";
 
@@ -49,6 +56,8 @@ export type RegisterActionState = {
     | "failed"
     | "user_exists"
     | "closed"
+    | "bad_setup_token"
+    | "setup_token_missing"
     | "invalid_data";
 };
 
@@ -73,7 +82,7 @@ export const register = async (
     // full console authority — every machine, the fleet export, and minting
     // enrolment codes.
     //
-    // The check lives here rather than in the proxy's public-path list: a
+    // These checks live here rather than in the proxy's public-path list: a
     // server action is dispatched by its id, not by the path it was posted
     // to, so it can be invoked through any public route.
     const { auth } = await import("./auth");
@@ -81,14 +90,41 @@ export const register = async (
 
     if (session?.user) {
       await createUser(validatedData.email, validatedData.password);
-    } else {
-      const claimed = await createFirstUser(
-        validatedData.email,
-        validatedData.password
-      );
-      if (!claimed) {
-        return { status: "closed" } as RegisterActionState;
-      }
+      return { status: "success" };
+    }
+
+    // Claimed already? Say so, before saying anything about the token — a
+    // token complaint on a claimed instance is both wrong and an invitation
+    // to keep guessing at one that no longer opens anything. createFirstUser
+    // below is still what actually adjudicates; this is for the message.
+    if (await hasAnyUser()) {
+      return { status: "closed" } as RegisterActionState;
+    }
+
+    // Claiming an unclaimed instance needs the token whoever deployed it set.
+    // Without this, the window between `docker compose up` and the operator
+    // reaching the form belongs to whoever finds the port first.
+    const expected = getContainer().env.SETUP_TOKEN;
+    if (!expected) {
+      return { status: "setup_token_missing" } as RegisterActionState;
+    }
+
+    const presented = formData.get("setupToken");
+    if (
+      !isValidSetupToken(
+        typeof presented === "string" ? presented : undefined,
+        expected
+      )
+    ) {
+      return { status: "bad_setup_token" } as RegisterActionState;
+    }
+
+    const claimed = await createFirstUser(
+      validatedData.email,
+      validatedData.password
+    );
+    if (!claimed) {
+      return { status: "closed" } as RegisterActionState;
     }
     await signIn("credentials", {
       email: validatedData.email,

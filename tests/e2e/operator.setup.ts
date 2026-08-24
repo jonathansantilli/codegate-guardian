@@ -66,6 +66,13 @@ setup("sign in as an operator, bootstrapping if needed", async ({ page }) => {
     await page.goto("/register");
     await page.getByPlaceholder("you@someo.ne").fill(EMAIL);
     await page.getByLabel("Password").fill(PASSWORD);
+
+    // Claiming an unclaimed instance needs the token the deployer set.
+    const setupToken = page.getByLabel("Setup token");
+    if (await setupToken.isVisible().catch(() => false)) {
+      await setupToken.fill(process.env.SETUP_TOKEN ?? "");
+    }
+
     await page.getByRole("button", { name: "Sign up", exact: true }).click();
     await page.waitForURL(/\/fleet/, { timeout: 30_000 });
   }

@@ -56,6 +56,18 @@ const envSchema = z.object({
   // Absent means the ingest endpoint is closed, so an instance that has not
   // opted in cannot be written to by an unauthenticated agent.
   AGENT_INGEST_TOKEN: optionalNonEmpty,
+  /**
+   * Claims an unclaimed instance.
+   *
+   * Registration on a fresh install has to let somebody in to become the
+   * first operator, and until they do, "reach the port" is the whole of
+   * authentication. Requiring a token the operator set before starting the
+   * container means the window is only open to whoever deployed it.
+   *
+   * Unset means an unclaimed instance cannot be claimed — fail closed, since
+   * the alternative is an open door on a fleet security console.
+   */
+  SETUP_TOKEN: optionalNonEmpty,
 
   // Telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalNonEmpty,

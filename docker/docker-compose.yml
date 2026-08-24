@@ -37,6 +37,8 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       # Agents present this to check in. Absent means ingest is closed.
       AGENT_INGEST_TOKEN: ${AGENT_INGEST_TOKEN:-}
+      # Required to claim a fresh instance; see .env.example.
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     volumes:
