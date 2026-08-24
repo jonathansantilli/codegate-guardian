@@ -10,10 +10,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     env_file:
@@ -23,26 +19,12 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       AUTH_SECRET: "${AUTH_SECRET:?AUTH_SECRET is required - generate one with 'openssl rand -base64 32'}"
       POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
-      REDIS_URL: redis://redis:6379
-      # Uploads go to the MinIO service. Switch OBJECT_STORE_DRIVER to
-      # filesystem to drop MinIO and use the uploads_data volume instead.
-      OBJECT_STORE_DRIVER: s3
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: us-east-1
-      S3_BUCKET: codegate-guardian-uploads
-      S3_ACCESS_KEY_ID: minioadmin
-      S3_SECRET_ACCESS_KEY: minioadmin
-      # Must be the URL a browser can reach MinIO at, not the internal one.
-      S3_PUBLIC_URL_BASE: ${S3_PUBLIC_URL_BASE:-http://localhost:9000/codegate-guardian-uploads}
-      S3_FORCE_PATH_STYLE: "true"
       # Agents present this to check in. Absent means ingest is closed.
       AGENT_INGEST_TOKEN: ${AGENT_INGEST_TOKEN:-}
       # Required to claim a fresh instance; see .env.example.
       SETUP_TOKEN: ${SETUP_TOKEN:-}
     ports:
       - "${APP_PORT:-3000}:3000"
-    volumes:
-      - uploads_data:/app/data/uploads
 
   migrate:
     build:
@@ -76,56 +58,5 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: codegate-guardian-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  minio:
-    image: minio/minio:latest
-    container_name: codegate-guardian-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: codegate-guardian-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 minioadmin minioadmin &&
-      (mc mb --ignore-existing local/codegate-guardian-uploads) &&
-      mc anonymous set download local/codegate-guardian-uploads &&
-      echo 'MinIO bucket ready';
-      "
-    restart: "no"
-
 volumes:
   postgres_data:
-  redis_data:
-  minio_data:
-  uploads_data:

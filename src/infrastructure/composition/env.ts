@@ -38,19 +38,13 @@ const envSchema = z.object({
   POSTGRES_URL: z.string().min(1, "POSTGRES_URL is required"),
 
   // Optional core
-  REDIS_URL: optionalNonEmpty,
 
-  // Absolute base URL this instance is reached at. Used for page metadata and
-  // for building fetchable URLs for locally stored uploads.
+  // Absolute base URL this instance is reached at. Used for page metadata.
   APP_URL: stringWithDefault("http://localhost:3000"),
 
-  // Demo / basePath behavior (A4 acceptance)
+  // Demo / basePath behavior
   IS_DEMO: booleanFromString.default(false),
   NEXT_PUBLIC_BASE_PATH: z.string().default(""),
-
-  // Feature flags
-
-  // Direct provider keys
 
   // Fleet ingest: shared bearer token every agent presents when reporting.
   // Absent means the ingest endpoint is closed, so an instance that has not
@@ -74,24 +68,6 @@ const envSchema = z.object({
 
   // Scanner CLI
   CODEGATE_HOME: optionalNonEmpty,
-
-  // Adapter selection (defaults chosen in each port's implementation
-  // phase; surfaced here so the env contract is visible now).
-  // Filesystem is the default so a bare `next start` needs no extra services;
-  // the compose stack opts into MinIO by setting this to "s3".
-  OBJECT_STORE_DRIVER: z.enum(["s3", "filesystem"]).default("filesystem"),
-
-  // Filesystem object store
-  OBJECT_STORE_PATH: stringWithDefault("./data/uploads"),
-
-  // S3 / MinIO configuration (required when OBJECT_STORE_DRIVER=s3)
-  S3_ENDPOINT: optionalNonEmpty,
-  S3_REGION: stringWithDefault("us-east-1"),
-  S3_BUCKET: optionalNonEmpty,
-  S3_ACCESS_KEY_ID: optionalNonEmpty,
-  S3_SECRET_ACCESS_KEY: optionalNonEmpty,
-  S3_PUBLIC_URL_BASE: optionalNonEmpty,
-  S3_FORCE_PATH_STYLE: booleanFromString.default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

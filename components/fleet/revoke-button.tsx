@@ -76,7 +76,6 @@ export function RevokeButton({
             background: "color-mix(in oklch, var(--fg) 22%, transparent)",
           }}
         >
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop; the panel takes focus. */}
           <div
             aria-hidden="true"
             onClick={() => setConfirming(false)}

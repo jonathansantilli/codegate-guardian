@@ -35,7 +35,6 @@ export function ExportButton({
 
       {open && (
         <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: closing backdrop; the menu items below are focusable. */}
           <div
             aria-hidden="true"
             onClick={() => setOpen(false)}

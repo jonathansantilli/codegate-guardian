@@ -6,34 +6,26 @@ export type ErrorType =
   | "rate_limit"
   | "offline";
 
-export type Surface =
-  | "chat"
-  | "auth"
-  | "api"
-  | "stream"
-  | "database"
-  | "history"
-  | "vote"
-  | "document"
-  | "suggestions";
+/**
+ * Where the error came from. This decides the wording the caller gets and
+ * whether they get any at all — a database failure is logged and answered
+ * with something deliberately vague, because its message describes our
+ * schema rather than anything the caller did wrong.
+ */
+export type Surface = "fleet" | "auth" | "api" | "database";
 
 export type ErrorCode = `${ErrorType}:${Surface}`;
 
-export type ErrorVisibility = "response" | "log" | "none";
+export type ErrorVisibility = "response" | "log";
 
 export const visibilityBySurface: Record<Surface, ErrorVisibility> = {
   database: "log",
-  chat: "response",
+  fleet: "response",
   auth: "response",
-  stream: "response",
   api: "response",
-  history: "response",
-  vote: "response",
-  document: "response",
-  suggestions: "response",
 };
 
-export class ChatbotError extends Error {
+export class GuardianError extends Error {
   type: ErrorType;
   surface: Surface;
   statusCode: number;
@@ -87,25 +79,14 @@ export function getMessageByErrorCode(errorCode: ErrorCode): string {
     case "forbidden:auth":
       return "Your account does not have access to this feature.";
 
-    case "rate_limit:chat":
-      return "You've reached the scan request limit. Come back in 1 hour to continue scanning.";
-    case "not_found:chat":
-      return "The requested scan session was not found. Please check the scan ID and try again.";
-    case "forbidden:chat":
-      return "This scan session belongs to another user. Please check the scan ID and try again.";
-    case "unauthorized:chat":
-      return "You need to sign in to view this scan session. Please sign in and try again.";
-    case "offline:chat":
-      return "We're having trouble processing your scan request. Please check your internet connection and try again.";
-
-    case "not_found:document":
-      return "The requested document was not found. Please check the document ID and try again.";
-    case "forbidden:document":
-      return "This document belongs to another user. Please check the document ID and try again.";
-    case "unauthorized:document":
-      return "You need to sign in to view this document. Please sign in and try again.";
-    case "bad_request:document":
-      return "The request to create or update the document was invalid. Please check your input and try again.";
+    case "unauthorized:fleet":
+      return "You need to sign in to view the fleet.";
+    case "forbidden:fleet":
+      return "Your account does not have access to this fleet.";
+    case "not_found:fleet":
+      return "That machine is not in the fleet.";
+    case "rate_limit:fleet":
+      return "Too many requests. Please wait a moment and try again.";
 
     default:
       return "Something went wrong. Please try again later.";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { ChatbotError } from "@/lib/errors";
+import { GuardianError } from "@/lib/errors";
 import { getContainer } from "@/src/infrastructure";
 
 const createSchema = z
@@ -24,7 +24,7 @@ const createSchema = z
 export async function GET() {
   const session = await auth();
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const suppressions = await getContainer().ports.fleet.listSuppressions();
@@ -37,7 +37,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
@@ -77,12 +77,12 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const session = await auth();
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const id = new URL(request.url).searchParams.get("id");
   if (!id) {
-    return new ChatbotError("bad_request:api").toResponse();
+    return new GuardianError("bad_request:api").toResponse();
   }
 
   const actor = session.user.email ?? session.user.id ?? "unknown";

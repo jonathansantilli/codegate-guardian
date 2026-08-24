@@ -5,7 +5,7 @@ The project runs three test tiers. CI runs all three on every push.
 | Tier | Runner | Script | Fixture source | Typical duration |
 |---|---|---|---|---|
 | Unit | `node:test` via `tsx` | `pnpm test:unit` | Hand-built fakes, no I/O | Seconds |
-| Integration | `node:test` + testcontainers | `pnpm test:integration` | Real Postgres/Redis/MinIO in throwaway Docker containers | Tens of seconds to minutes |
+| Integration | `node:test` + testcontainers | `pnpm test:integration` | Real Postgres in a throwaway Docker container | Tens of seconds to minutes |
 | E2E | Playwright | `pnpm test:e2e` | Full Next.js dev server (or docker-compose stack in CI) | Minutes |
 
 `pnpm test` runs all three in order.
@@ -59,10 +59,9 @@ after(async () => { await harness.stop(); });
 beforeEach(async () => { await harness.resetDatabase(); });
 ```
 
-Add a similar helper per external dependency as adapters arrive:
-`testcontainer-redis.ts`, `testcontainer-minio.ts`. One container per
-test file, not per test — container startup is expensive, truncation is
-cheap.
+Add a similar helper per external dependency as adapters arrive. One
+container per test file, not per test — container startup is expensive,
+truncation is cheap.
 
 ### E2E tests
 
@@ -141,7 +140,7 @@ The `pnpm test:unit:coverage` script runs `c8` scoped to domain + application.
 - Old containers holding ports — `docker ps | grep codegate` and remove
   stale containers.
 - Image pull timeout on cold machine — run `docker pull
-  postgres:16-alpine redis:7-alpine minio/minio` up front.
+  postgres:16-alpine` up front.
 
 ### Playwright flake
 

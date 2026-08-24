@@ -20,9 +20,7 @@ describe("loadEnv", () => {
     const env = loadEnv(processEnv({ ...REQUIRED }));
 
     assert.equal(env.APP_URL, "http://localhost:3000");
-    assert.equal(env.OBJECT_STORE_DRIVER, "filesystem");
-    assert.equal(env.OBJECT_STORE_PATH, "./data/uploads");
-    assert.equal(env.S3_REGION, "us-east-1");
+    assert.equal(env.NEXT_PUBLIC_BASE_PATH, "");
     assert.equal(env.IS_DEMO, false);
   });
 
@@ -39,28 +37,24 @@ describe("loadEnv", () => {
     const env = loadEnv(
       processEnv({
         ...REQUIRED,
-        REDIS_URL: "",
-        S3_BUCKET: "",
+        AGENT_INGEST_TOKEN: "",
+        SETUP_TOKEN: "",
       })
     );
 
-    assert.equal(env.REDIS_URL, undefined);
-    assert.equal(env.S3_BUCKET, undefined);
+    assert.equal(env.AGENT_INGEST_TOKEN, undefined);
+    assert.equal(env.SETUP_TOKEN, undefined);
   });
 
   test("falls back to the default when a defaulted variable is empty", () => {
     const env = loadEnv(
       processEnv({
         ...REQUIRED,
-        APP_URL: "",
-        OBJECT_STORE_PATH: "   ",
-        S3_REGION: "",
+        APP_URL: "   ",
       })
     );
 
     assert.equal(env.APP_URL, "http://localhost:3000");
-    assert.equal(env.OBJECT_STORE_PATH, "./data/uploads");
-    assert.equal(env.S3_REGION, "us-east-1");
   });
 
   test("keeps real values and trims them", () => {
@@ -93,9 +87,9 @@ describe("loadEnv", () => {
     );
   });
 
-  test("rejects an unknown object store driver", () => {
+  test("rejects a value outside an enum", () => {
     assert.throws(
-      () => loadEnv(processEnv({ ...REQUIRED, OBJECT_STORE_DRIVER: "gcs" })),
+      () => loadEnv(processEnv({ ...REQUIRED, NODE_ENV: "staging" })),
       EnvValidationError
     );
   });

@@ -4,7 +4,7 @@ import { count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { DrizzleUserRepository } from "@/src/infrastructure/persistence/drizzle-postgres/repositories/user-repository";
-import { ChatbotError } from "../errors";
+import { GuardianError } from "../errors";
 import { type User, user } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -21,7 +21,7 @@ export async function getUser(email: string): Promise<User[]> {
   try {
     return await userRepository.findByEmail(email);
   } catch (_error) {
-    throw new ChatbotError(
+    throw new GuardianError(
       "bad_request:database",
       "Failed to get user by email"
     );
@@ -34,7 +34,7 @@ export async function createUser(email: string, password: string) {
   try {
     await userRepository.create({ email, passwordHash: hashedPassword });
   } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to create user");
+    throw new GuardianError("bad_request:database", "Failed to create user");
   }
 }
 
@@ -64,6 +64,6 @@ export async function createFirstUser(
       passwordHash: generateHashedPassword(password),
     });
   } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to create user");
+    throw new GuardianError("bad_request:database", "Failed to create user");
   }
 }
