@@ -46,9 +46,10 @@ const envSchema = z.object({
   IS_DEMO: booleanFromString.default(false),
   NEXT_PUBLIC_BASE_PATH: z.string().default(""),
 
-  // Fleet ingest: shared bearer token every agent presents when reporting.
-  // Absent means the ingest endpoint is closed, so an instance that has not
-  // opted in cannot be written to by an unauthenticated agent.
+  // Opens enrolment. A machine presents this once, to join; from then on it
+  // reports with its own per-machine token. Absent means no new machine can
+  // enrol — it does NOT stop machines that already have a token, so this is
+  // not a way to shut ingest down in an incident. Revoke the machine instead.
   AGENT_INGEST_TOKEN: optionalNonEmpty,
   /**
    * Claims an unclaimed instance.

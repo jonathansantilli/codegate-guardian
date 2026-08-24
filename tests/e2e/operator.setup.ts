@@ -51,6 +51,13 @@ function operatorPassword(): string {
 const PASSWORD = operatorPassword();
 
 setup("sign in as an operator, bootstrapping if needed", async ({ page }) => {
+  // A session cookie is encrypted with AUTH_SECRET. A stored state written
+  // under a different secret — a previous run invoked another way, or a
+  // rotated secret — is not merely useless: the server logs a
+  // JWTSessionError for every /api/auth/session poll, which reads as a
+  // console fault when it is a stale test artefact. Start from nothing.
+  await page.context().clearCookies();
+
   await page.goto("/login");
   await page.getByPlaceholder("you@someo.ne").fill(EMAIL);
   await page.getByLabel("Password").fill(PASSWORD);

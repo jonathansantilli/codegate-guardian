@@ -36,7 +36,7 @@ cp .env.example .env
 # Session signing secret
 openssl rand -base64 32           # → AUTH_SECRET
 
-# Without this, no machine can report in
+# Without this, no new machine can enrol
 openssl rand -hex 32              # → AGENT_INGEST_TOKEN
 
 # Claims the instance — you will be asked for it when you register

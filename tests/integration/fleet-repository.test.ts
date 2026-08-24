@@ -1495,3 +1495,127 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
     assert.equal(suppression.blastRadius, 1);
   });
 });
+
+describe("Feature: rejected check-ins cannot bury the audit trail", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  const WINDOW_MS = 5 * 60 * 1000;
+  const AT = new Date("2026-08-20T12:00:00Z");
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    await harness.stop();
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  // The caller this throttle exists to bound is unauthenticated, so it can
+  // issue its requests concurrently. A select-then-insert could not hold:
+  // every concurrent reader saw "nothing recent" before any of them wrote.
+  it("Given many concurrent rejections in one window, when they are recorded, then exactly one row is written", async () => {
+    await Promise.all(
+      Array.from({ length: 50 }, () =>
+        repository.recordRejectionThrottled({
+          reason: "unknown_token",
+          at: AT,
+          windowMs: WINDOW_MS,
+        })
+      )
+    );
+
+    const activity = await repository.listActivity(200);
+
+    assert.equal(activity.length, 1);
+    assert.equal(activity[0].result, "unknown_token");
+  });
+
+  it("Given a later window, when a rejection is recorded, then it is written again", async () => {
+    await repository.recordRejectionThrottled({
+      reason: "unknown_token",
+      at: AT,
+      windowMs: WINDOW_MS,
+    });
+    await repository.recordRejectionThrottled({
+      reason: "unknown_token",
+      at: new Date(AT.getTime() + WINDOW_MS),
+      windowMs: WINDOW_MS,
+    });
+
+    assert.equal((await repository.listActivity(200)).length, 2);
+  });
+
+  // A revoked machine keeps running and keeps checking in — it is refused on
+  // every attempt, and one row per attempt would push every other entry out
+  // of the panel that exists to tell an operator what is being turned away.
+  it("Given a revoked machine checking in repeatedly, when its refusals are recorded, then it cannot flood the log", async () => {
+    await Promise.all(
+      Array.from({ length: 50 }, () =>
+        repository.recordRejectionThrottled({
+          reason: "enrolment_revoked",
+          at: AT,
+          windowMs: WINDOW_MS,
+          actorName: "revoked-laptop",
+        })
+      )
+    );
+
+    const activity = await repository.listActivity(200);
+
+    assert.equal(activity.length, 1);
+    assert.equal(activity[0].actorName, "revoked-laptop");
+  });
+
+  it("Given two machines refused in one window, when both are recorded, then each is recorded once", async () => {
+    await Promise.all([
+      ...Array.from({ length: 20 }, () =>
+        repository.recordRejectionThrottled({
+          reason: "enrolment_revoked",
+          at: AT,
+          windowMs: WINDOW_MS,
+          actorName: "laptop-one",
+        })
+      ),
+      ...Array.from({ length: 20 }, () =>
+        repository.recordRejectionThrottled({
+          reason: "enrolment_revoked",
+          at: AT,
+          windowMs: WINDOW_MS,
+          actorName: "laptop-two",
+        })
+      ),
+    ]);
+
+    const activity = await repository.listActivity(200);
+
+    assert.equal(activity.length, 2);
+    assert.deepEqual(activity.map((row) => row.actorName).sort(), [
+      "laptop-one",
+      "laptop-two",
+    ]);
+  });
+
+  // Ordinary activity leaves throttleKey null, and a unique index over a
+  // nullable column must not collapse those into one row.
+  it("Given ordinary activity, when many rows are written, then none are throttled away", async () => {
+    for (let i = 0; i < 5; i++) {
+      await repository.recordActivity({
+        occurredAt: AT,
+        actorKind: "person",
+        actorName: "operator",
+        action: "Signed in",
+        target: null,
+        result: "Accepted",
+        apiCall: null,
+      });
+    }
+
+    assert.equal((await repository.listActivity(200)).length, 5);
+  });
+});

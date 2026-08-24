@@ -1,6 +1,5 @@
-// Infrastructure layer entry point. Concrete adapters and framework glue.
-// Everything Vercel-free: persistence, object store, LLM providers,
-// telemetry, logger, auth, HTTP, middleware, composition.
+// Infrastructure layer entry point. Concrete adapters and framework glue:
+// persistence, auth, HTTP, middleware, composition.
 //
 // Only the composition root is imported from outside this layer.
 

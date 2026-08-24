@@ -21,6 +21,54 @@ import { getContainer } from "@/src/infrastructure";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
+class BodyTooLargeError extends Error {}
+
+/** Never later than arrival: a future collection time is not a real one. */
+function clampToArrival(collectedAt: string, receivedAt: Date): Date {
+  const collected = new Date(collectedAt);
+  return collected > receivedAt ? receivedAt : collected;
+}
+
+/**
+ * Reads the body, refusing to buffer more than MAX_BODY_BYTES.
+ *
+ * The Content-Length check above is only a courtesy to honest clients: a
+ * chunked request omits the header entirely, so trusting it left the real
+ * bound as whatever the framework happened to allow. This counts what
+ * actually arrives and stops reading, so an unauthenticated-shaped caller
+ * cannot make the server buffer an arbitrary amount of memory.
+ */
+async function readCappedBody(request: Request): Promise<string> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return "";
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new BodyTooLargeError();
+    }
+    chunks.push(value);
+  }
+
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(joined);
+}
+
 function toItemInput(item: InventoryItemPayload): RecordInventoryItemInput {
   return {
     tool: item.tool,
@@ -107,14 +155,26 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Content-Length is the caller's claim, and a chunked request simply omits
+  // it — so this is a fast rejection for honest clients, not the bound.
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > MAX_BODY_BYTES) {
     return Response.json({ error: "Report too large" }, { status: 413 });
   }
 
+  let raw: string;
+  try {
+    raw = await readCappedBody(request);
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return Response.json({ error: "Report too large" }, { status: 413 });
+    }
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(raw);
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -141,14 +201,15 @@ export async function POST(request: Request) {
   // means, so the refusal is recorded like any other rejected check-in. The
   // machine is the one the token belongs to, so renaming itself does not help.
   if (reporting.revokedAt) {
-    await container.ports.fleet.recordActivity({
-      occurredAt: receivedAt,
-      actorKind: "agent",
+    // Throttled like any other refusal. A revoked machine keeps checking in
+    // for as long as it keeps running, and one row per attempt would push
+    // every other entry out of the rejection panel — the one place an
+    // operator looks to find out what is being turned away.
+    await container.ports.fleet.recordRejectionThrottled({
+      reason: REJECTION_REVOKED,
+      at: receivedAt,
+      windowMs: REJECTION_WINDOW_MS,
       actorName: reporting.hostname,
-      action: "Check-in rejected",
-      target: null,
-      result: REJECTION_REVOKED,
-      apiCall: "POST /api/agent/report",
     });
     return Response.json({ error: "Enrolment revoked" }, { status: 403 });
   }
@@ -162,7 +223,13 @@ export async function POST(request: Request) {
       osRelease: payload.host.osRelease ?? null,
       username: payload.host.username ?? null,
       agentVersion: payload.agent.version ?? null,
-      collectedAt: new Date(payload.collectedAt),
+      // Clamped to arrival. collectedAt is the agent's own clock and is
+      // therefore whatever a compromised machine says it is — and it ranks
+      // the attention queue, so an ancient value sinks a machine's own
+      // CRITICAL row below everyone else's. A machine cannot have collected
+      // data after the server received it; a clock behind is ordinary skew
+      // and is left alone.
+      collectedAt: clampToArrival(payload.collectedAt, receivedAt),
       receivedAt,
       kbVersion: payload.inventory.kb_version ?? null,
       toolsDetected: payload.inventory.tools,

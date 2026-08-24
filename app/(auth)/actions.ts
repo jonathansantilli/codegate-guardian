@@ -71,6 +71,19 @@ export const register = async (
       password: formData.get("password"),
     });
 
+    // The signed-in branch below is the only one that may create a further
+    // account, so resolve the session before saying anything at all about
+    // which addresses exist. Answering "user_exists" to an anonymous caller
+    // on a claimed instance is an oracle: it distinguishes the operator's
+    // address from every other, unauthenticated and unlimited, which is the
+    // first half of a password-spraying attempt.
+    const { auth } = await import("./auth");
+    const session = await auth();
+
+    if (!session?.user && (await hasAnyUser())) {
+      return { status: "closed" } as RegisterActionState;
+    }
+
     const [user] = await getUser(validatedData.email);
 
     if (user) {
@@ -89,9 +102,6 @@ export const register = async (
     // These checks live here rather than in the proxy's public-path list: a
     // server action is dispatched by its id, not by the path it was posted
     // to, so it can be invoked through any public route.
-    const { auth } = await import("./auth");
-    const session = await auth();
-
     if (session?.user) {
       await createUser(validatedData.email, validatedData.password);
       return { status: "success" };
@@ -101,6 +111,7 @@ export const register = async (
     // token complaint on a claimed instance is both wrong and an invitation
     // to keep guessing at one that no longer opens anything. createFirstUser
     // below is still what actually adjudicates; this is for the message.
+    // (An anonymous caller was already turned away above.)
     if (await hasAnyUser()) {
       return { status: "closed" } as RegisterActionState;
     }
