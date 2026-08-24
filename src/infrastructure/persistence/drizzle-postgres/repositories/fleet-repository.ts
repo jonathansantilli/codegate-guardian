@@ -379,7 +379,12 @@ export class DrizzleFleetRepository implements FleetRepository {
           hosts.map((h) => h.id)
         )
       )
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt));
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      );
 
     const reportByHostId = new Map(latestReports.map((r) => [r.hostId, r]));
     const reportIds = latestReports.map((r) => r.id);
@@ -588,7 +593,11 @@ export class DrizzleFleetRepository implements FleetRepository {
       .select()
       .from(hostReport)
       .where(eq(hostReport.hostId, hostId))
-      .orderBy(desc(hostReport.receivedAt))
+      .orderBy(
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .limit(1);
 
     if (!report) {
@@ -651,7 +660,11 @@ export class DrizzleFleetRepository implements FleetRepository {
           eq(hostReport.findingsReported, true)
         )
       )
-      .orderBy(desc(hostReport.receivedAt))
+      .orderBy(
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .limit(1);
 
     if (!withFindings) {
@@ -702,7 +715,11 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostReport)
       .where(eq(hostReport.hostId, hostId))
-      .orderBy(desc(hostReport.receivedAt))
+      .orderBy(
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .limit(limit);
 
     if (reports.length === 0) {
@@ -754,7 +771,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostReport)
       .where(eq(hostReport.findingsReported, true))
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     const rows = await this.db
@@ -876,7 +898,12 @@ export class DrizzleFleetRepository implements FleetRepository {
         hostId: hostReport.hostId,
       })
       .from(hostReport)
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest_feed");
 
     const [newest] = await this.db
@@ -891,7 +918,11 @@ export class DrizzleFleetRepository implements FleetRepository {
     const [newestReport] = await this.db
       .select({ receivedAt: hostReport.receivedAt })
       .from(hostReport)
-      .orderBy(desc(hostReport.receivedAt))
+      .orderBy(
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .limit(1);
 
     return {
@@ -981,7 +1012,12 @@ export class DrizzleFleetRepository implements FleetRepository {
     const latest = this.db
       .selectDistinctOn([hostReport.hostId], { id: hostReport.id })
       .from(hostReport)
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     const rows = await this.db
@@ -1090,7 +1126,12 @@ export class DrizzleFleetRepository implements FleetRepository {
         id: hostReport.id,
       })
       .from(hostReport)
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     const rows = await this.db
@@ -1209,7 +1250,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostReport)
       .where(eq(hostReport.findingsReported, true))
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     const rows = await this.db
@@ -1257,7 +1303,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       .select({ id: hostReport.id, hostId: hostReport.hostId })
       .from(hostReport)
       .where(eq(hostReport.findingsReported, true))
-      .orderBy(hostReport.hostId, hostReport.receivedAt);
+      .orderBy(
+        hostReport.hostId,
+        hostReport.receivedAt,
+        hostReport.collectedAt,
+        hostReport.id
+      );
 
     const reportsByHost = new Map<string, string[]>();
     for (const row of sequence) {
@@ -1431,7 +1482,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       .selectDistinctOn([hostReport.hostId], { id: hostReport.id })
       .from(hostReport)
       .where(eq(hostReport.findingsReported, true))
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     const counts = await this.db
@@ -1551,36 +1607,29 @@ export class DrizzleFleetRepository implements FleetRepository {
     at: Date;
     windowMs: number;
   }): Promise<void> {
-    const since = new Date(at.getTime() - windowMs);
+    // One row per window, enforced by a unique index rather than by looking
+    // first. The caller reaching this path is unauthenticated, so it can fire
+    // concurrently — and every concurrent select reads "nothing recent" before
+    // any of them inserts. Fixed windows rather than sliding: the bucket is
+    // what the index can be unique on.
+    const bucket = Math.floor(at.getTime() / windowMs);
 
-    const [recent] = await this.db
-      .select({ id: activityEvent.id })
-      .from(activityEvent)
-      .where(
-        and(
-          eq(activityEvent.action, CHECK_IN_REJECTED),
-          eq(activityEvent.result, reason),
-          gt(activityEvent.occurredAt, since)
-        )
-      )
-      .limit(1);
-
-    if (recent) {
-      return;
-    }
-
-    await this.db.insert(activityEvent).values({
-      occurredAt: at,
-      actorKind: "agent",
-      // Deliberately not the hostname the caller claimed: an unauthenticated
-      // request has no identity, and letting it name itself here let an
-      // attacker both flood and mislabel the audit trail.
-      actorName: "unidentified machine",
-      action: CHECK_IN_REJECTED,
-      target: null,
-      result: reason,
-      apiCall: "POST /api/agent/report",
-    });
+    await this.db
+      .insert(activityEvent)
+      .values({
+        occurredAt: at,
+        actorKind: "agent",
+        // Deliberately not the hostname the caller claimed: an unauthenticated
+        // request has no identity, and letting it name itself here let an
+        // attacker both flood and mislabel the audit trail.
+        actorName: "unidentified machine",
+        action: CHECK_IN_REJECTED,
+        target: null,
+        result: reason,
+        apiCall: "POST /api/agent/report",
+        throttleKey: `${CHECK_IN_REJECTED}:${reason}:${bucket}`,
+      })
+      .onConflictDoNothing({ target: activityEvent.throttleKey });
   }
 
   async recordActivity(input: RecordActivityInput): Promise<void> {
@@ -1670,7 +1719,12 @@ export class DrizzleFleetRepository implements FleetRepository {
       })
       .from(hostReport)
       .where(eq(hostReport.findingsReported, true))
-      .orderBy(hostReport.hostId, desc(hostReport.receivedAt))
+      .orderBy(
+        hostReport.hostId,
+        desc(hostReport.receivedAt),
+        desc(hostReport.collectedAt),
+        desc(hostReport.id)
+      )
       .as("latest");
 
     // Rows rather than a grouped count, so an operator's suppressions can be
