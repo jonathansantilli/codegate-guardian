@@ -54,8 +54,9 @@ docker compose -f docker/docker-compose.yml up --build
 2. **Create the first operator.** The form asks for an email, a password, and
    the **setup token** — the `SETUP_TOKEN` you generated above. That token is
    what makes this account yours rather than whoever else can reach the port.
-3. **Registration closes behind you.** The setup-token field disappears, and
-   from then on only a signed-in operator can create an account.
+3. **Registration closes behind you.** The setup-token field disappears and
+   the sign-up form closes for good. This console has a single operator —
+   there is no way to add a second.
 4. **Generate an enrolment code** under **API & access**.
 5. **Connect a machine**, using the code:
    ```bash
@@ -75,8 +76,7 @@ first operator, and until that happens, reaching the port is the whole of
 authentication — the compose stack publishes on `0.0.0.0:3000`, so on a
 networked host that window belongs to whoever finds it first. The token means
 it belongs to whoever deployed it. Registration closes behind the first
-operator; after that only a signed-in operator can create an account, and the
-token is no longer used.
+operator, and the token is no longer used.
 
 ## Enrolling a machine
 
@@ -148,8 +148,13 @@ own bearer token rather than a session cookie.
 
 **The first person to register becomes the operator**, and must present
 `SETUP_TOKEN` to do it — so a networked instance cannot be claimed by whoever
-reaches the port first. Registration closes behind them: after that only a
-signed-in operator can create an account.
+reaches the port first. Registration then closes for good.
+
+**One instance, one operator.** There is no user management, no roles and no
+way to add a second account: everyone who needs the console shares that login,
+or you run an instance per team. This is a deliberate limit of this version
+rather than an oversight — a console that can add operators needs invitations,
+roles and an audit trail of who granted what, and none of that is built.
 
 ### Starting over
 
