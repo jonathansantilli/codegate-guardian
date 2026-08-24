@@ -439,9 +439,18 @@ export type FleetRepository = {
    * record that a machine was taken over.
    */
   recordRejectionThrottled(input: {
+    /** One of a fixed set of server-side constants, never caller text. */
     reason: string;
     at: Date;
     windowMs: number;
+    /**
+     * The machine the credential resolved to, when there is one. A revoked
+     * machine is refused but identified, and it is refused on every check-in
+     * for as long as it keeps running — so it needs the same one-row-per-
+     * window treatment as an anonymous caller, just recorded under its own
+     * name. Omitted for a caller we cannot identify.
+     */
+    actorName?: string;
   }): Promise<void>;
   listActivity(limit?: number): Promise<ActivityRecord[]>;
   /**

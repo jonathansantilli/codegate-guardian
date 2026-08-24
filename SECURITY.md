@@ -49,6 +49,11 @@ tooling and its findings, which is worth protecting on its own.
   and serve the console over TLS.
 - **Revoke a machine from Access** when a laptop is lost or rebuilt. A revoked
   token is refused at ingest and the rejection is recorded.
+- **A person's session cannot be revoked.** Sessions are JWTs with a 30-day
+  expiry; signing out clears the cookie but does not invalidate it, so a
+  stolen session cookie outlives a password change. The console can cut off a
+  machine, not a person. If an operator account is compromised, rotate
+  `AUTH_SECRET` and restart — that invalidates every existing session.
 - **Serve it over TLS.** Session cookies and agent tokens both cross the wire;
   the proxy expects the scheme it issued cookies under.
 - **Keep it on an internal network.** Nothing in the design assumes a public

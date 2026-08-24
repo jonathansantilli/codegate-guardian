@@ -33,6 +33,13 @@ export const fetcher = async (url: string) => {
 
   // No code we recognise: derive one from the status, so callers can still
   // tell "signed out" from "broken" rather than seeing an opaque TypeError.
+  // A 5xx is not the caller's fault, so it must not be reported as one —
+  // "please check your input" on a crashed route or a proxy 502 sends the
+  // operator looking in the wrong place.
+  if (response.status >= 500) {
+    throw new GuardianError("offline:fleet", cause);
+  }
+
   throw new GuardianError(
     response.status === 401
       ? "unauthorized:fleet"

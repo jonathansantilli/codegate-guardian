@@ -1602,10 +1602,12 @@ export class DrizzleFleetRepository implements FleetRepository {
     reason,
     at,
     windowMs,
+    actorName,
   }: {
     reason: string;
     at: Date;
     windowMs: number;
+    actorName?: string;
   }): Promise<void> {
     // One row per window, enforced by a unique index rather than by looking
     // first. The caller reaching this path is unauthenticated, so it can fire
@@ -1622,12 +1624,14 @@ export class DrizzleFleetRepository implements FleetRepository {
         // Deliberately not the hostname the caller claimed: an unauthenticated
         // request has no identity, and letting it name itself here let an
         // attacker both flood and mislabel the audit trail.
-        actorName: "unidentified machine",
+        actorName: actorName ?? "unidentified machine",
         action: CHECK_IN_REJECTED,
         target: null,
         result: reason,
         apiCall: "POST /api/agent/report",
-        throttleKey: `${CHECK_IN_REJECTED}:${reason}:${bucket}`,
+        // The actor is resolved from a credential, never from the payload, so
+        // the key space is bounded by the machines that exist.
+        throttleKey: `${CHECK_IN_REJECTED}:${reason}:${actorName ?? ""}:${bucket}`,
       })
       .onConflictDoNothing({ target: activityEvent.throttleKey });
   }

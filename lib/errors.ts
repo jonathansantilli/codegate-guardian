@@ -87,6 +87,8 @@ export function getMessageByErrorCode(errorCode: ErrorCode): string {
       return "That machine is not in the fleet.";
     case "rate_limit:fleet":
       return "Too many requests. Please wait a moment and try again.";
+    case "offline:fleet":
+      return "The console could not be reached. It may be restarting — try again in a moment.";
 
     default:
       return "Something went wrong. Please try again later.";

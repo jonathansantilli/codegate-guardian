@@ -107,13 +107,25 @@ function configuredTarget() {
   }
 
   // The WHATWG parser returns IPv6 hosts bracketed; compare without them.
-  const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  // postgresql: is a non-special scheme, so the parser does not lowercase
+  // the host the way it would for http:.
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "") {
     return { status: "unknown", why: "POSTGRES_URL has no host" };
   }
-  return LOCAL_HOSTS.has(host)
-    ? { status: "local" }
-    : { status: "remote", host };
+  if (!LOCAL_HOSTS.has(host)) {
+    return { status: "remote", host };
+  }
+
+  // Right host, wrong database is the same bug in miniature: dropping
+  // "postgres" while the app reads "guardian" resets something nothing is
+  // looking at and leaves the console the operator opens still claimed.
+  const database = parsed.pathname.replace(/^\//, "");
+  if (database && database !== DATABASE) {
+    return { status: "other-database", database };
+  }
+
+  return { status: "local" };
 }
 
 const target = configuredTarget();
@@ -126,6 +138,17 @@ if (target.status === "remote") {
       "reset a database nothing is reading, and leave the console you open still\n" +
       "claimed — while a hosted database is not something to drop by inference.\n\n" +
       "Point POSTGRES_URL at the local stack first, or drop that database yourself."
+  );
+  process.exit(1);
+}
+
+if (target.status === "other-database") {
+  console.error(
+    "Refusing to drop anything.\n\n" +
+      `This resets the "${DATABASE}" database, but POSTGRES_URL points the app at\n` +
+      `"${target.database}" on the same host. Dropping "${DATABASE}" would reset a\n` +
+      "database nothing is reading, and leave the console you open still claimed.\n\n" +
+      `Run it against the right one:  POSTGRES_DB=${target.database} pnpm fresh`
   );
   process.exit(1);
 }
