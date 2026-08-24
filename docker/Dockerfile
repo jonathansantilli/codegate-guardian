@@ -61,18 +61,13 @@ ENV NODE_ENV=production
 ENV PORT=3000
 # Bind to every interface so the port is reachable from outside the container.
 ENV HOSTNAME=0.0.0.0
-ENV OBJECT_STORE_PATH=/app/data/uploads
 
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Default upload location for OBJECT_STORE_DRIVER=filesystem. Mount a volume
-# here to keep uploads across container replacements.
-RUN mkdir -p /app/data/uploads && chown -R nextjs:nodejs /app/data
 
 USER nextjs
 EXPOSE 3000

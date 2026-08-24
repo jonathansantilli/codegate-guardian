@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { ChatbotError } from "@/lib/errors";
+import { GuardianError } from "@/lib/errors";
 import { getContainer } from "@/src/infrastructure";
 
 const bodySchema = z.object({
@@ -15,12 +15,12 @@ export async function PUT(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return new ChatbotError("bad_request:api").toResponse();
+    return new GuardianError("bad_request:api").toResponse();
   }
 
   const actor = session.user.email ?? session.user.id ?? "unknown";

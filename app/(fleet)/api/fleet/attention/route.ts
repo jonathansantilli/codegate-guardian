@@ -1,5 +1,5 @@
 import { auth } from "@/app/(auth)/auth";
-import { ChatbotError } from "@/lib/errors";
+import { GuardianError } from "@/lib/errors";
 import { getContainer } from "@/src/infrastructure";
 
 /**
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   // Uncapped when the caller asks about one finding: the findings screen

@@ -131,8 +131,8 @@ jobs:
 
       # The suite runs against `next start`, which serves from .next/ — where
       # static assets always are. The image does NOT: docker/Dockerfile copies
-      # .next/standalone, .next/static and public in as three separate layers,
-      # and the standalone bundle contains neither of the last two. If those
+      # .next/standalone and .next/static in as separate layers, and the
+      # standalone bundle does not contain the latter. If those
       # COPY lines drift, or a Next upgrade changes what standalone includes,
       # every JS chunk 404s: pages still render, /ping still answers 200, and
       # nothing on the page works because React never hydrates. `next start`
@@ -142,7 +142,6 @@ jobs:
         run: |
           set -euo pipefail
           cp -r .next/static .next/standalone/.next/static
-          cp -r public .next/standalone/public
           PORT=3001 node .next/standalone/server.js &
           for _ in $(seq 1 60); do
             curl -fsS http://localhost:3001/ping >/dev/null 2>&1 && break

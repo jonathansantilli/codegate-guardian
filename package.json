@@ -1,6 +1,12 @@
 {
   "name": "codegate-guardian",
   "version": "3.1.0",
+  "description": "Self-hosted console that shows what the codegate agent reports from developer machines.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonathansantilli/codegate-guardian.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
@@ -25,7 +31,6 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.111",
-    "@aws-sdk/client-s3": "^3.1114.0",
     "ai": "6.0.116",
     "bcrypt-ts": "^5.0.2",
     "class-variance-authority": "^0.7.1",
@@ -42,7 +47,6 @@
     "radix-ui": "^1.4.3",
     "react": "19.0.1",
     "react-dom": "19.0.1",
-    "redis": "^5.0.0",
     "server-only": "^0.0.1",
     "sonner": "^1.5.0",
     "streamdown": "^2.3.0",

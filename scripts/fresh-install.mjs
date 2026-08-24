@@ -13,6 +13,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const CONTAINER =
   process.env.POSTGRES_CONTAINER ?? "codegate-guardian-postgres";
@@ -53,6 +54,50 @@ const ports = docker(["port", CONTAINER]).split("\n").join(" ");
 if (!(ports.includes("127.0.0.1") || ports.includes("0.0.0.0"))) {
   console.error(
     `"${CONTAINER}" does not look like a local stack — refusing to drop its data.`
+  );
+  process.exit(1);
+}
+
+// The container being local is not enough. This script drops the container's
+// database, but the app reads POSTGRES_URL — and a .env.local left pointing at
+// a hosted database means the drop silently resets something nobody is looking
+// at, while the console the operator opens is untouched and still claimed.
+// Worse, that URL is exactly the kind that is not safe to guess at.
+function configuredHost() {
+  const fromEnv = process.env.POSTGRES_URL;
+  const raw = fromEnv ?? readEnvLocal("POSTGRES_URL");
+  if (!raw) {
+    return null;
+  }
+  try {
+    return new URL(raw.trim().replace(/^["']|["']$/g, "")).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function readEnvLocal(key) {
+  try {
+    const line = readFileSync(".env.local", "utf8")
+      .split("\n")
+      .find((l) => l.startsWith(`${key}=`));
+    return line ? line.slice(key.length + 1) : null;
+  } catch {
+    return null;
+  }
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "postgres"]);
+const appHost = configuredHost();
+
+if (appHost && !LOCAL_HOSTS.has(appHost)) {
+  console.error(
+    "Refusing to drop anything.\n\n" +
+      `This resets the "${CONTAINER}" container, but POSTGRES_URL points the app at\n` +
+      `a different, non-local database (${appHost}). Dropping the container would\n` +
+      "reset a database nothing is reading, and leave the console you open still\n" +
+      "claimed — while a hosted database is not something to drop by inference.\n\n" +
+      "Point POSTGRES_URL at the local stack first, or drop that database yourself."
   );
   process.exit(1);
 }

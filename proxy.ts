@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { isSecureRequest } from "./lib/security/request-protocol";
-import { AGENT_ROUTE_PREFIX, UPLOADS_ROUTE_PATH } from "./src/shared/routes";
+import { AGENT_ROUTE_PREFIX } from "./src/shared/routes";
 
 /** Reachable without a session: everything else needs one. */
 const PUBLIC_PATHS = new Set(["/login", "/register"]);
@@ -20,14 +20,6 @@ export async function proxy(request: NextRequest) {
   // Agents authenticate with a bearer token, not a session cookie, so the
   // session gate must not answer a machine check-in with a sign-in page.
   if (pathname.startsWith(AGENT_ROUTE_PREFIX)) {
-    return NextResponse.next();
-  }
-
-  // Stored uploads are public, as they were on the previous hosted blob store:
-  // the browser renders them in the transcript and vision models fetch them by
-  // URL, with no session cookie to present. Keys are uuid-prefixed and the
-  // object store rejects anything that could escape its root.
-  if (pathname.startsWith(UPLOADS_ROUTE_PATH)) {
     return NextResponse.next();
   }
 

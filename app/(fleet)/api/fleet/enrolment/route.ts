@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { ChatbotError } from "@/lib/errors";
+import { GuardianError } from "@/lib/errors";
 import { generateEnrolmentCode } from "@/lib/security/enrolment-code";
 import { getContainer } from "@/src/infrastructure";
 
@@ -23,7 +23,7 @@ const createSchema = z.object({
 export async function GET() {
   const session = await auth();
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const codes = await getContainer().ports.fleet.listEnrolmentCodes(new Date());
@@ -36,7 +36,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
+    return new GuardianError("unauthorized:fleet").toResponse();
   }
 
   const parsed = createSchema.safeParse(await request.json().catch(() => ({})));

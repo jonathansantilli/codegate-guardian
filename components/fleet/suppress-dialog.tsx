@@ -97,7 +97,6 @@ export function SuppressDialog({
         background: "color-mix(in oklch, var(--fg) 22%, transparent)",
       }}
     >
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the panel below takes focus; this is the backdrop. */}
       <div
         aria-hidden="true"
         onClick={onClose}

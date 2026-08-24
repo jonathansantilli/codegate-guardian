@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { ChatbotError, type ErrorCode } from "./errors";
+import { GuardianError, type ErrorCode } from "./errors";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -12,7 +12,7 @@ export const fetcher = async (url: string) => {
 
   if (!response.ok) {
     const { code, cause } = await response.json();
-    throw new ChatbotError(code as ErrorCode, cause);
+    throw new GuardianError(code as ErrorCode, cause);
   }
 
   return response.json();
