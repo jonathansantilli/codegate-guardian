@@ -33,12 +33,10 @@ const nextConfig: NextConfig = {
     incomingRequests: false,
   },
   images: {
-    // Self-hosted deployments serve uploads from the configured object store
-    // (local filesystem or any S3-compatible endpoint), so the host is not
-    // known at build time and the optimizer is bypassed.
+    // Nothing here is served through the image optimizer: the console renders
+    // no remote imagery, and a self-hosted instance should not need one.
     unoptimized: true,
   },
-  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
   experimental: {
     prefetchInlining: true,
     cachedNavigations: true,

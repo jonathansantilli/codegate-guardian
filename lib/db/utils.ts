@@ -1,4 +1,4 @@
-import { generateId } from "ai";
+import { randomUUID } from "node:crypto";
 import { genSaltSync, hashSync } from "bcrypt-ts";
 
 export function generateHashedPassword(password: string) {
@@ -9,7 +9,7 @@ export function generateHashedPassword(password: string) {
 }
 
 export function generateDummyPassword() {
-  const password = generateId();
+  const password = randomUUID();
   const hashedPassword = generateHashedPassword(password);
 
   return hashedPassword;

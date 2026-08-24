@@ -30,15 +30,11 @@
     "fresh": "node scripts/fresh-install.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.111",
-    "ai": "6.0.116",
     "bcrypt-ts": "^5.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "codegate-ai": "^0.7.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.34.0",
-    "katex": "^0.16.28",
     "lucide-react": "^0.446.0",
     "next": "16.2.0",
     "next-auth": "5.0.0-beta.25",
@@ -49,7 +45,6 @@
     "react-dom": "19.0.1",
     "server-only": "^0.0.1",
     "sonner": "^1.5.0",
-    "streamdown": "^2.3.0",
     "swr": "^2.2.5",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",

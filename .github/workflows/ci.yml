@@ -65,7 +65,6 @@ jobs:
       - name: Pre-pull test images
         run: |
           docker pull postgres:16-alpine
-          docker pull redis:7-alpine
       - name: Run integration tests
         run: pnpm test:integration
         env:

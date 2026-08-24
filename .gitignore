@@ -28,7 +28,7 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 local-models.config.json
 
-# Locally stored uploads (filesystem object store)
+# Local data directory
 /data/
 
 # Screen recordings kept out of the build context

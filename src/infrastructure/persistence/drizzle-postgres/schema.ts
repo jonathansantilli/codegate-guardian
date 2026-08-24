@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -311,10 +312,21 @@ export const activityEvent = pgTable(
     result: text("result").notNull(),
     /** The API call behind it, where there was one. */
     apiCall: text("apiCall"),
+    /**
+     * Set only on rows that are rate-limited into one-per-window, and unique
+     * so the DATABASE is what enforces that. A select-then-insert cannot: the
+     * caller being throttled here is unauthenticated, so it can issue the
+     * requests concurrently and every one of them reads "no recent row" before
+     * any of them writes. Null for every other kind of event.
+     */
+    throttleKey: text("throttleKey"),
   },
   (table) => ({
     occurredIdx: index("ActivityEvent_v1_occurred_idx").on(table.occurredAt),
     actorIdx: index("ActivityEvent_v1_actor_idx").on(table.actorKind),
+    throttleKeyIdx: uniqueIndex("ActivityEvent_v1_throttle_key_idx").on(
+      table.throttleKey
+    ),
   })
 );
 
