@@ -136,10 +136,10 @@ Next.js's anonymous telemetry is disabled in the `dev`, `build` and `start`
 scripts and in every stage of the Dockerfile, so no build reports anywhere
 either.
 
-Fonts are the one build-time exception: `next/font/google` downloads Geist at
-**build** time and self-hosts the files in the image, so a running instance
-fetches nothing from Google — but the machine doing the build needs to reach
-`fonts.googleapis.com` once.
+That includes the build. Fonts are vendored in `app/fonts/` rather than
+fetched from Google, so a build needs nothing beyond this repository and its
+npm dependencies — verified by building with the network pointed at a dead
+proxy.
 
 ## Configuration
 

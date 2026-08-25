@@ -66,7 +66,9 @@ export function RegisterForm({
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
-      <p className="text-sm text-muted-foreground">Get started for free</p>
+      <p className="text-sm text-muted-foreground">
+        Claim this console as its operator
+      </p>
       <AuthForm
         action={handleSubmit}
         defaultEmail={email}

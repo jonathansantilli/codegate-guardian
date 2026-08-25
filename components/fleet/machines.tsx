@@ -42,6 +42,7 @@ type HostSummary = {
     agentVersion: string | null;
     lastSeenAt: string;
     revokedAt: string | null;
+    enrolmentOpenedAt: string | null;
   };
   itemsTotal: number;
   toolNames: string[];
@@ -235,7 +236,8 @@ export function MachinesScreen() {
                 const status = machineStatus(
                   getHostFreshness(new Date(entry.host.lastSeenAt)),
                   entry.host.revokedAt,
-                  entry.lastCollectedAt
+                  entry.lastCollectedAt,
+                  entry.host.enrolmentOpenedAt
                 );
                 const severities = bySeverity.get(entry.host.id) ?? [];
                 const worst = [...severities].sort(

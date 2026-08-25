@@ -102,22 +102,55 @@ describe("machineStatus", () => {
     const status = machineStatus(
       "stale",
       new Date("2026-08-01T00:00:00Z"),
-      NOW
+      NOW,
+      null
     );
     assert.equal(status.label, "Revoked");
   });
 
   test("revocation outranks even a machine still reporting", () => {
     // The last report can be minutes old and the door still closed.
-    assert.equal(machineStatus("online", new Date(), NOW).label, "Revoked");
+    assert.equal(
+      machineStatus("online", new Date(), NOW, null).label,
+      "Revoked"
+    );
   });
 
   test("an unrevoked machine reads by how recently it reported", () => {
-    assert.equal(machineStatus("online", null, NOW).label, "Reporting");
-    assert.equal(machineStatus("stale", null, NOW).label, "Stale");
+    assert.equal(machineStatus("online", null, NOW, null).label, "Reporting");
+    assert.equal(machineStatus("stale", null, NOW, null).label, "Stale");
     assert.equal(
-      machineStatus("offline", null, NOW).label,
+      machineStatus("offline", null, NOW, null).label,
       "No recent reports"
+    );
+  });
+});
+
+describe("machineStatus for a machine an operator reopened", () => {
+  // A restored machine holds no credential until its agent comes back, and
+  // during that window any holder of a live enrolment code could claim it.
+  // An operator has to be able to see that, not infer it.
+  test("an open enrolment window is its own state, not silence", () => {
+    assert.equal(
+      machineStatus("offline", null, NOW, new Date()).label,
+      "Awaiting re-enrolment"
+    );
+  });
+
+  test("it reads as awaiting even while the last report is still fresh", () => {
+    assert.equal(
+      machineStatus("online", null, NOW, new Date()).label,
+      "Awaiting re-enrolment"
+    );
+  });
+
+  // Revocation and an open window are mutually exclusive in practice —
+  // restoring clears revokedAt — but if both were ever set, refusing reports
+  // is the more important fact.
+  test("revocation still outranks an open window", () => {
+    assert.equal(
+      machineStatus("online", new Date(), NOW, new Date()).label,
+      "Revoked"
     );
   });
 });
@@ -125,10 +158,16 @@ describe("machineStatus", () => {
 describe("machineStatus for a machine that has never reported", () => {
   test("enrolling is not reporting", () => {
     // Enrolment stamps lastSeenAt, so freshness alone called it healthy.
-    assert.equal(machineStatus("online", null, null).label, "Never reported");
+    assert.equal(
+      machineStatus("online", null, null, null).label,
+      "Never reported"
+    );
   });
 
   test("revocation still outranks it", () => {
-    assert.equal(machineStatus("online", new Date(), null).label, "Revoked");
+    assert.equal(
+      machineStatus("online", new Date(), null, null).label,
+      "Revoked"
+    );
   });
 });

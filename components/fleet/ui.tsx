@@ -55,10 +55,27 @@ export function machineStatus(
    * green for a machine the table beside it called "Never reported". Making
    * it required turns that into a compile error.
    */
-  lastCollectedAt: string | Date | null
+  lastCollectedAt: string | Date | null,
+  /**
+   * When an operator reopened this machine for enrolment, if they have.
+   *
+   * A restored machine holds no credential until its agent comes back, and
+   * during that window any holder of a live enrolment code could claim it.
+   * That is a state an operator needs to see, not infer from its absence.
+   * Required for the same reason as lastCollectedAt: as an optional argument
+   * a caller that forgot it silently showed the wrong badge.
+   */
+  enrolmentOpenedAt: string | Date | null
 ): { label: string; tone: "ok" | "warn" | "sec"; color: string } {
   if (revokedAt) {
     return { label: "Revoked", tone: "sec", color: "var(--fg3)" };
+  }
+  if (enrolmentOpenedAt !== null) {
+    return {
+      label: "Awaiting re-enrolment",
+      tone: "warn",
+      color: "var(--warn)",
+    };
   }
   if (lastCollectedAt === null) {
     // Enrolment stamps lastSeenAt, so freshness alone reads a machine that

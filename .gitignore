@@ -34,6 +34,9 @@ tsconfig.tsbuildinfo
 *.mov
 *.mp4
 
+# Agent workspace: settings here can hold tokens
+.claude/
+
 # Working notes kept out of the repository
 docs/plans/
 docs/*-handoff.md
