@@ -3,10 +3,13 @@
 import { z } from "zod";
 
 import {
+  clearSignInFailures,
   createFirstUser,
   createUser,
   getUser,
   hasAnyUser,
+  isSignInThrottled,
+  recordSignInFailure,
 } from "@/lib/db/queries";
 import { isValidSetupToken } from "@/lib/security/setup-token";
 import { getContainer } from "@/src/infrastructure";
@@ -19,7 +22,13 @@ const authFormSchema = z.object({
 });
 
 export type LoginActionState = {
-  status: "idle" | "in_progress" | "success" | "failed" | "invalid_data";
+  status:
+    | "idle"
+    | "in_progress"
+    | "success"
+    | "failed"
+    | "invalid_data"
+    | "rate_limited";
 };
 
 export const login = async (
@@ -32,16 +41,32 @@ export const login = async (
       password: formData.get("password"),
     });
 
+    // Counted per address, in the database, before the password is checked.
+    // Without this, reaching the port buys unlimited guesses at the one
+    // account that exists, at whatever rate bcrypt allows, leaving nothing
+    // behind to show it happened.
+    if (await isSignInThrottled(validatedData.email)) {
+      return { status: "rate_limited" };
+    }
+
     await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,
       redirect: false,
     });
 
+    // signIn throws on a bad credential, so reaching here means it worked.
+    await clearSignInFailures(validatedData.email);
+
     return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
+    }
+
+    const email = formData.get("email");
+    if (typeof email === "string" && email.length > 0) {
+      await recordSignInFailure(email);
     }
 
     return { status: "failed" };

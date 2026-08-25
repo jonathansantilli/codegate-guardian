@@ -84,6 +84,17 @@ export const host = pgTable(
      * for one machine, and enrolling consumes it.
      */
     enrolmentOpen: boolean("enrolmentOpen").notNull().default(false),
+    /**
+     * When an operator opened the window, for windows an operator opened.
+     *
+     * Null means the window came from the upgrade backfill (migration 0014),
+     * which has no expiry — a fleet upgrading from before per-machine tokens
+     * re-enrols on its own schedule and must not be locked out by a clock.
+     * A restore sets this, and that window expires: a credential-less slot
+     * that stays open forever is one anybody holding a live enrolment code
+     * can walk into, and a cohort code is held by every machine in the cohort.
+     */
+    enrolmentOpenedAt: timestamp("enrolmentOpenedAt"),
   },
   (table) => ({
     machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),
@@ -359,3 +370,33 @@ export const policy = pgTable(
 );
 
 export type Policy = InferSelectModel<typeof policy>;
+
+/**
+ * Failed sign-ins, bucketed into fixed windows.
+ *
+ * A console with one operator and no lockout lets anyone who reaches the port
+ * try passwords for as long as they like, at whatever rate bcrypt allows, and
+ * leaves nothing behind to say they did. Counting them in the database rather
+ * than in memory keeps the limit real across restarts and across more than
+ * one instance, and needs no service this project does not already run.
+ */
+export const signInAttempt = pgTable(
+  "SignInAttempt_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    /** Lowercased email. Never the password, and never a hash of one. */
+    identifier: text("identifier").notNull(),
+    /** Start of the fixed window this count belongs to. */
+    windowStart: timestamp("windowStart").notNull(),
+    failures: integer("failures").notNull().default(0),
+  },
+  (table) => ({
+    windowUnique: unique("SignInAttempt_v1_identifier_window_unique").on(
+      table.identifier,
+      table.windowStart
+    ),
+    windowIdx: index("SignInAttempt_v1_window_idx").on(table.windowStart),
+  })
+);
+
+export type SignInAttempt = InferSelectModel<typeof signInAttempt>;

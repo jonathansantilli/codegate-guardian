@@ -13,7 +13,8 @@
 Please report vulnerabilities privately first.
 
 1. Do not open a public GitHub issue.
-2. Email: `jonathansantilli@gmail.com` with:
+2. Use GitHub's private vulnerability reporting on this repository
+   (**Security → Report a vulnerability**), including:
    - affected version
    - reproduction steps
    - impact assessment
@@ -48,7 +49,18 @@ tooling and its findings, which is worth protecting on its own.
   nothing is cryptographically signed, so treat the token as the secret it is
   and serve the console over TLS.
 - **Revoke a machine from Access** when a laptop is lost or rebuilt. A revoked
-  token is refused at ingest and the rejection is recorded.
+  token is refused at ingest and the rejection is recorded. Revoking stops
+  *that machine*: it does not stop whoever holds a still-valid enrolment code
+  from enrolling as a **new** machine, so revoke the code too if the machine
+  was compromised rather than merely retired.
+- **Restoring a machine opens a one-hour window** in which it may re-enrol
+  without a token. That window is opened by an operator and closes by itself;
+  while it is open, any holder of a live enrolment code can claim that
+  machine's identity. Restore when the machine is ready to come back, not in
+  advance.
+- **Sign-in attempts are limited** to 10 failures per address per 15 minutes,
+  counted in the database. A locked-out address is refused before the password
+  is checked.
 - **A person's session cannot be revoked.** Sessions are JWTs with a 30-day
   expiry; signing out clears the cookie but does not invalidate it, so a
   stolen session cookie outlives a password change. The console can cut off a
