@@ -144,6 +144,7 @@ const HOST_COLUMNS = {
   revokedBy: host.revokedBy,
   enrolledAt: host.enrolledAt,
   enrolmentOpen: host.enrolmentOpen,
+  enrolmentOpenedAt: host.enrolmentOpenedAt,
 } as const;
 
 /** Postgres reports a unique-constraint breach with this code. */

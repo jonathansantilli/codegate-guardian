@@ -1,5 +1,8 @@
 name: CI
 
+# Node 22 throughout: docker/Dockerfile builds on node:22-alpine, and CI
+# testing a different runtime than the image ships is how a version-specific
+# failure reaches production green.
 on:
   push:
     branches: [main, master]
@@ -20,7 +23,7 @@ jobs:
           version: 10.32.1
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -40,7 +43,7 @@ jobs:
           version: 10.32.1
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -58,7 +61,7 @@ jobs:
           version: 10.32.1
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -108,7 +111,7 @@ jobs:
           version: 10.32.1
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

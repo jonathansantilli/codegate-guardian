@@ -29,6 +29,11 @@ export type Host = {
   enrolledAt: Date | null;
   /** Set by an operator so this machine may bind a new credential, once. */
   enrolmentOpen: boolean;
+  /**
+   * When that window was opened, for windows an operator opened. Null for the
+   * upgrade backfill, which does not expire.
+   */
+  enrolmentOpenedAt: Date | null;
 };
 
 /**

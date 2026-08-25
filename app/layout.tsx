@@ -1,11 +1,47 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { ThemeColorSync } from "@/components/theme-color-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
+
+// Served from this repository rather than fetched from Google at build time.
+// A self-hosted console should build without reaching a third party, and an
+// air-gapped build cannot fetch a font. These are the upstream Geist variable
+// files, latin and latin-ext, which is what this UI renders.
+const geistSans = localFont({
+  src: [
+    { path: "./fonts/geist-latin.woff2", weight: "100 900", style: "normal" },
+    {
+      path: "./fonts/geist-latin-ext.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-geist",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
+});
+
+const geistMono = localFont({
+  src: [
+    {
+      path: "./fonts/geist-mono-latin.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+    {
+      path: "./fonts/geist-mono-latin-ext.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-geist-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "monospace"],
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
@@ -18,18 +54,6 @@ export const viewport = {
   maximumScale: 1,
 };
 
-const geist = Geist({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-geist",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-geist-mono",
-});
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,7 +61,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
       lang="en"
       suppressHydrationWarning
     >

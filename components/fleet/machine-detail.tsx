@@ -50,6 +50,7 @@ export type HostDetail = {
     lastSeenAt: string;
     revokedAt: string | null;
     revokedBy: string | null;
+    enrolmentOpenedAt: string | null;
   };
   lastCollectedAt: string | null;
   kbVersion: string | null;
@@ -100,7 +101,8 @@ export function MachineHeader({ detail }: { detail: HostDetail }) {
   const status = machineStatus(
     getHostFreshness(new Date(host.lastSeenAt)),
     host.revokedAt,
-    detail.lastCollectedAt
+    detail.lastCollectedAt,
+    host.enrolmentOpenedAt
   );
   const critical = detail.findings.filter(
     (f) => f.severity === "CRITICAL"
