@@ -1647,12 +1647,19 @@ describe("Feature: a restored machine's enrolment window closes on its own", () 
       tokenHash: "hash-original",
       enrolledAt: NOW,
     });
-    return result.hostId as string;
+    if (result.outcome !== "enrolled") {
+      throw new Error(`expected a fresh enrolment, got ${result.outcome}`);
+    }
+    return result.hostId;
   }
 
   it("Given a machine restored moments ago, when it re-enrols, then it is let back in", async () => {
     const hostId = await enrolledMachine();
-    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.revokeHost({
+      hostId,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
     await repository.restoreHost({ hostId, at: NOW });
 
     const result = await repository.enrolHost({
@@ -1670,7 +1677,11 @@ describe("Feature: a restored machine's enrolment window closes on its own", () 
   // offering that slot to anyone holding a code.
   it("Given a restore left open past the window, when anyone enrols as that machine, then it is refused", async () => {
     const hostId = await enrolledMachine();
-    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.revokeHost({
+      hostId,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
     await repository.restoreHost({ hostId, at: NOW });
 
     const result = await repository.enrolHost({
@@ -1684,7 +1695,11 @@ describe("Feature: a restored machine's enrolment window closes on its own", () 
 
   it("Given a restored machine that came back, when a second caller uses the same code, then the window is already spent", async () => {
     const hostId = await enrolledMachine();
-    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.revokeHost({
+      hostId,
+      revokedAt: NOW,
+      revokedBy: "operator",
+    });
     await repository.restoreHost({ hostId, at: NOW });
 
     await repository.enrolHost({
