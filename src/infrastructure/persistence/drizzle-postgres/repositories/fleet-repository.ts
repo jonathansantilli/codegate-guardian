@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  or,
   sql,
 } from "drizzle-orm";
 import type {
@@ -71,6 +72,17 @@ const ATTENTION_LIMIT = 50;
 const REJECTION_LIMIT = 20;
 
 const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * How long a restore leaves a machine open to re-enrol.
+ *
+ * The window has no credential of its own — any live enrolment code opens it,
+ * and a cohort code is held by every machine in the cohort — so its only real
+ * bound is time. An agent that is running comes back on its next check-in;
+ * an hour is generous for that and short enough that a forgotten restore is
+ * not a standing invitation.
+ */
+const RESTORE_WINDOW_MS = 60 * 60 * 1000;
 
 /** How far back the overview's check-in chart reaches. */
 const CHECK_IN_WINDOW_HOURS = 24;
@@ -148,6 +160,7 @@ function isUniqueViolation(error: unknown): boolean {
 
 /** Written by the ingest endpoint when a check-in is turned away. */
 const CHECK_IN_REJECTED = "Check-in rejected";
+const ENROLMENT_REFUSED = "Enrolment refused";
 
 const DAY_MS = 24 * HOUR_MS;
 
@@ -462,7 +475,13 @@ export class DrizzleFleetRepository implements FleetRepository {
       .where(eq(host.id, hostId));
   }
 
-  async restoreHost({ hostId }: { hostId: string }): Promise<void> {
+  async restoreHost({
+    hostId,
+    at = new Date(),
+  }: {
+    hostId: string;
+    at?: Date;
+  }): Promise<void> {
     // The withdrawn credential is retired with the revocation — a token that
     // was revoked should never work again — and the machine is opened for one
     // enrolment so it can come back. Both halves are the operator's act, which
@@ -474,6 +493,10 @@ export class DrizzleFleetRepository implements FleetRepository {
         revokedBy: null,
         agentTokenHash: null,
         enrolmentOpen: true,
+        // Stamped, so the window closes on its own if the machine never
+        // comes back. An operator who restores and then forgets should not
+        // be leaving a slot open for the rest of the instance's life.
+        enrolmentOpenedAt: at,
       })
       .where(eq(host.id, hostId));
   }
@@ -525,7 +548,12 @@ export class DrizzleFleetRepository implements FleetRepository {
     if (existing) {
       const [rebound] = await this.db
         .update(host)
-        .set({ agentTokenHash: tokenHash, enrolledAt, enrolmentOpen: false })
+        .set({
+          agentTokenHash: tokenHash,
+          enrolledAt,
+          enrolmentOpen: false,
+          enrolmentOpenedAt: null,
+        })
         // Every condition re-checked in the UPDATE, so the window cannot be
         // consumed twice: two enrolments racing for one open slot both read
         // it open, and the second finds the predicate false and gets nothing.
@@ -534,7 +562,16 @@ export class DrizzleFleetRepository implements FleetRepository {
             eq(host.id, existing.id),
             eq(host.enrolmentOpen, true),
             isNull(host.agentTokenHash),
-            isNull(host.revokedAt)
+            isNull(host.revokedAt),
+            // Null: the upgrade backfill, which does not expire. Stamped: an
+            // operator's restore, which does.
+            or(
+              isNull(host.enrolmentOpenedAt),
+              gt(
+                host.enrolmentOpenedAt,
+                new Date(enrolledAt.getTime() - RESTORE_WINDOW_MS)
+              )
+            )
           )
         )
         .returning({ id: host.id });
@@ -1599,16 +1636,19 @@ export class DrizzleFleetRepository implements FleetRepository {
     return row ? { id: row.id } : null;
   }
   async recordRejectionThrottled({
+    kind = "check-in",
     reason,
     at,
     windowMs,
     actorName,
   }: {
+    kind?: "check-in" | "enrolment";
     reason: string;
     at: Date;
     windowMs: number;
     actorName?: string;
   }): Promise<void> {
+    const action = kind === "enrolment" ? ENROLMENT_REFUSED : CHECK_IN_REJECTED;
     // One row per window, enforced by a unique index rather than by looking
     // first. The caller reaching this path is unauthenticated, so it can fire
     // concurrently — and every concurrent select reads "nothing recent" before
@@ -1625,13 +1665,16 @@ export class DrizzleFleetRepository implements FleetRepository {
         // request has no identity, and letting it name itself here let an
         // attacker both flood and mislabel the audit trail.
         actorName: actorName ?? "unidentified machine",
-        action: CHECK_IN_REJECTED,
+        action,
         target: null,
         result: reason,
-        apiCall: "POST /api/agent/report",
+        apiCall:
+          kind === "enrolment"
+            ? "POST /api/agent/enrol"
+            : "POST /api/agent/report",
         // The actor is resolved from a credential, never from the payload, so
         // the key space is bounded by the machines that exist.
-        throttleKey: `${CHECK_IN_REJECTED}:${reason}:${actorName ?? ""}:${bucket}`,
+        throttleKey: `${action}:${reason}:${actorName ?? ""}:${bucket}`,
       })
       .onConflictDoNothing({ target: activityEvent.throttleKey });
   }

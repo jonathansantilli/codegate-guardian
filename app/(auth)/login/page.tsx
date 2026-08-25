@@ -25,11 +25,21 @@ export default function Page() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: router and updateSession are stable refs
   useEffect(() => {
     if (state.status === "failed") {
-      toast({ type: "error", description: "Invalid credentials!" });
+      toast({
+        type: "error",
+        description: "That email and password do not match.",
+      });
+    } else if (state.status === "rate_limited") {
+      toast({
+        type: "error",
+        description:
+          "Too many sign-in attempts. Wait a few minutes and try again.",
+      });
     } else if (state.status === "invalid_data") {
       toast({
         type: "error",
-        description: "Failed validating your submission!",
+        description:
+          "Enter an email address and a password of at least 6 characters.",
       });
     } else if (state.status === "success") {
       setIsSuccessful(true);

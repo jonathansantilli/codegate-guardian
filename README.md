@@ -169,6 +169,14 @@ or you run an instance per team. This is a deliberate limit of this version
 rather than an oversight — a console that can add operators needs invitations,
 roles and an audit trail of who granted what, and none of that is built.
 
+### Restoring a machine
+
+Restore reopens a revoked machine so its agent can enrol again. The window
+lasts an hour and closes as soon as the machine comes back. It carries no
+credential of its own, so while it is open any holder of a live enrolment code
+could claim that machine — restore when the machine is ready, not in advance,
+and revoke the code as well if the machine was compromised.
+
 ### Starting over
 
 Once you have registered, the console is claimed and the sign-up form stops

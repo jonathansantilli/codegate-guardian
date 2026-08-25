@@ -6,6 +6,9 @@ import {
 } from "@/lib/security/machine-token";
 import { getContainer } from "@/src/infrastructure";
 
+/** One recorded refusal per window; see recordRejectionThrottled. */
+const ENROLMENT_REFUSAL_WINDOW_MS = 5 * 60 * 1000;
+
 /**
  * Exchanges a single-use enrolment code for the token a machine reports with.
  *
@@ -54,6 +57,17 @@ export async function POST(request: Request) {
   });
 
   if (!redeemed) {
+    // Recorded, throttled. A run of refused enrolments is the shape of
+    // somebody guessing at codes, and until now it left no trace at all —
+    // an operator wondering why a machine never appeared had nothing to
+    // look at. One row per window, so it cannot become the flood it reports.
+    await container.ports.fleet.recordRejectionThrottled({
+      kind: "enrolment",
+      reason: "Code cannot be used",
+      at: new Date(),
+      windowMs: ENROLMENT_REFUSAL_WINDOW_MS,
+    });
+
     // One message for every failure: unknown, expired, revoked, and spent are
     // all the same to a caller who should not be probing which.
     return Response.json(

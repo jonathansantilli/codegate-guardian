@@ -1,0 +1,1 @@
+ALTER TABLE "Host_v1" ADD COLUMN "enrolmentOpenedAt" timestamp;

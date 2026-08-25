@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { sql } from "drizzle-orm";
 import type {
   RecordFindingInput,
   RecordHostReportInput,
@@ -1617,5 +1618,104 @@ describe("Feature: rejected check-ins cannot bury the audit trail", () => {
     }
 
     assert.equal((await repository.listActivity(200)).length, 5);
+  });
+});
+
+describe("Feature: a restored machine's enrolment window closes on its own", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  const NOW = new Date("2026-08-20T12:00:00Z");
+  const HOUR = 60 * 60 * 1000;
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    await harness.stop();
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  async function enrolledMachine(): Promise<string> {
+    const result = await repository.enrolHost({
+      machineId: MACHINE_A,
+      tokenHash: "hash-original",
+      enrolledAt: NOW,
+    });
+    return result.hostId as string;
+  }
+
+  it("Given a machine restored moments ago, when it re-enrols, then it is let back in", async () => {
+    const hostId = await enrolledMachine();
+    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.restoreHost({ hostId, at: NOW });
+
+    const result = await repository.enrolHost({
+      machineId: MACHINE_A,
+      tokenHash: "hash-after-restore",
+      enrolledAt: new Date(NOW.getTime() + 60_000),
+    });
+
+    assert.equal(result.outcome, "enrolled");
+  });
+
+  // The window carries no credential of its own: any live enrolment code
+  // opens it, and a cohort code is held by every machine in the cohort. Left
+  // open forever, an operator who restored a machine months ago is still
+  // offering that slot to anyone holding a code.
+  it("Given a restore left open past the window, when anyone enrols as that machine, then it is refused", async () => {
+    const hostId = await enrolledMachine();
+    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.restoreHost({ hostId, at: NOW });
+
+    const result = await repository.enrolHost({
+      machineId: MACHINE_A,
+      tokenHash: "hash-attacker",
+      enrolledAt: new Date(NOW.getTime() + HOUR + 60_000),
+    });
+
+    assert.equal(result.outcome, "already-enrolled");
+  });
+
+  it("Given a restored machine that came back, when a second caller uses the same code, then the window is already spent", async () => {
+    const hostId = await enrolledMachine();
+    await repository.revokeHost({ hostId, revokedBy: "operator", at: NOW });
+    await repository.restoreHost({ hostId, at: NOW });
+
+    await repository.enrolHost({
+      machineId: MACHINE_A,
+      tokenHash: "hash-real-machine",
+      enrolledAt: new Date(NOW.getTime() + 60_000),
+    });
+    const second = await repository.enrolHost({
+      machineId: MACHINE_A,
+      tokenHash: "hash-attacker",
+      enrolledAt: new Date(NOW.getTime() + 120_000),
+    });
+
+    assert.equal(second.outcome, "already-enrolled");
+  });
+
+  // Machines predating per-machine tokens were opened in bulk by migration
+  // 0014 with no timestamp. They must keep working: a fleet upgrading on its
+  // own schedule cannot be locked out by a clock it never set.
+  it("Given a machine opened by the upgrade backfill, when it enrols much later, then it is still let in", async () => {
+    await harness.db.execute(
+      sql`insert into "Host_v1" ("machineId","hostname","platform","enrolmentOpen","enrolmentOpenedAt","firstSeenAt","lastSeenAt")
+          values (${MACHINE_B},'legacy-laptop','linux',true,null,${NOW.toISOString()},${NOW.toISOString()})`
+    );
+
+    const result = await repository.enrolHost({
+      machineId: MACHINE_B,
+      tokenHash: "hash-legacy",
+      enrolledAt: new Date(NOW.getTime() + 30 * 24 * HOUR),
+    });
+
+    assert.equal(result.outcome, "enrolled");
   });
 });

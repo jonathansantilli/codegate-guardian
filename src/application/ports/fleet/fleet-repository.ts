@@ -379,7 +379,7 @@ export type FleetRepository = {
     revokedBy: string;
   }): Promise<void>;
   /** Reverses a revocation, so the machine's reports are accepted again. */
-  restoreHost(input: { hostId: string }): Promise<void>;
+  restoreHost(input: { hostId: string; at?: Date }): Promise<void>;
   /** The machine behind an agent's id, for deciding whether to accept a report. */
   findHostByMachineId(machineId: string): Promise<Host | null>;
   /**
@@ -439,6 +439,11 @@ export type FleetRepository = {
    * record that a machine was taken over.
    */
   recordRejectionThrottled(input: {
+    /**
+     * Which refusal this is. A closed set, so the throttle key space stays
+     * bounded no matter what a caller sends.
+     */
+    kind?: "check-in" | "enrolment";
     /** One of a fixed set of server-side constants, never caller text. */
     reason: string;
     at: Date;
