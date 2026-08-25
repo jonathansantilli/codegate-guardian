@@ -1,2 +1,0 @@
-ALTER TABLE "ActivityEvent_v1" ADD COLUMN "throttleKey" text;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "ActivityEvent_v1_throttle_key_idx" ON "ActivityEvent_v1" USING btree ("throttleKey");
