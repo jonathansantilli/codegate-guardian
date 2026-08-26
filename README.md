@@ -196,6 +196,23 @@ credential of its own, so while it is open any holder of a live enrolment code
 could claim that machine — restore when the machine is ready, not in advance,
 and revoke the code as well if the machine was compromised.
 
+### Keeping the database from growing forever
+
+Every machine writes a report on every check-in, and nothing removes them on
+its own. `pnpm prune` deletes what the console no longer needs — run it from
+cron on anything long-lived:
+
+```
+0 4 * * *  cd /srv/guardian && pnpm prune
+```
+
+Reports older than 90 days go, and activity older than 180
+(`REPORT_RETENTION_DAYS` and `ACTIVITY_RETENTION_DAYS` change that). Two
+reports per machine are kept regardless of age: its latest, which "last seen"
+and the current inventory come from, and its latest findings-bearing one,
+which every finding's status is derived from. Pruning that second one would
+not trim history — it would make the machine look clean.
+
 ### Starting over
 
 Once you have registered, the console is claimed and the sign-up form stops

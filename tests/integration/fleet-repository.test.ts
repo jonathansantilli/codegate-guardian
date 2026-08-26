@@ -1734,3 +1734,146 @@ describe("Feature: a restored machine's enrolment window closes on its own", () 
     assert.equal(result.outcome, "enrolled");
   });
 });
+
+describe("Feature: history is pruned without losing what status is derived from", () => {
+  let harness: PostgresHarness;
+  let repository: DrizzleFleetRepository;
+
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = new Date("2026-08-20T12:00:00Z");
+  const CUTOFF = new Date(NOW.getTime() - 30 * DAY);
+
+  before(async () => {
+    harness = await startPostgresHarness();
+    repository = new DrizzleFleetRepository(harness.db);
+  });
+
+  after(async () => {
+    await harness.stop();
+  });
+
+  beforeEach(async () => {
+    await harness.resetDatabase();
+  });
+
+  function at(daysAgo: number): Date {
+    return new Date(NOW.getTime() - daysAgo * DAY);
+  }
+
+  async function reportAt(daysAgo: number, findings?: RecordFindingInput[]) {
+    return await repository.recordReport(
+      report({
+        receivedAt: at(daysAgo),
+        collectedAt: at(daysAgo),
+        findings,
+      })
+    );
+  }
+
+  const FINDING: RecordFindingInput = {
+    findingId: "f-old",
+    ruleId: "env-base-url-override",
+    fingerprint: "fp-retained",
+    severity: "CRITICAL",
+    category: null,
+    layer: null,
+    filePath: "/Users/x/.claude/settings.json",
+    contentHash: `sha256:${"c".repeat(64)}`,
+    line: null,
+    column: null,
+    description: "Agent traffic redirected to a third party",
+    evidence: null,
+    owasp: [],
+    cwe: null,
+    confidence: null,
+    fixable: null,
+    suppressed: false,
+  };
+
+  it("Given reports older than the cutoff, when history is pruned, then they are removed", async () => {
+    await reportAt(100);
+    await reportAt(90);
+    await reportAt(1);
+
+    const removed = await repository.pruneHistory({
+      reportsBefore: CUTOFF,
+      activityBefore: CUTOFF,
+      signInAttemptsBefore: CUTOFF,
+    });
+
+    assert.equal(removed.reports, 2);
+  });
+
+  it("Given only old reports, when history is pruned, then the latest is still kept", async () => {
+    await reportAt(100);
+    await reportAt(90);
+
+    const removed = await repository.pruneHistory({
+      reportsBefore: CUTOFF,
+      activityBefore: CUTOFF,
+      signInAttemptsBefore: CUTOFF,
+    });
+
+    // The older one goes; the machine's most recent report is what lastSeenAt
+    // and the current inventory are read from, so it survives any cutoff.
+    assert.equal(removed.reports, 1);
+  });
+
+  // The one that matters. Status is derived from the latest findings-bearing
+  // report, so pruning it would not trim history — it would make every
+  // finding on that machine disappear and the console would call a
+  // compromised machine clean.
+  it("Given an old findings report and newer inventory-only ones, when pruned, then the findings survive", async () => {
+    await reportAt(100, [FINDING]);
+    await reportAt(60);
+    await reportAt(1);
+
+    const before = await repository.listFindings();
+    assert.equal(before.length, 1);
+    assert.equal(before[0].status, "open");
+
+    await repository.pruneHistory({
+      reportsBefore: CUTOFF,
+      activityBefore: CUTOFF,
+      signInAttemptsBefore: CUTOFF,
+    });
+
+    const after = await repository.listFindings();
+    assert.equal(
+      after.length,
+      1,
+      "the finding must not vanish with its report"
+    );
+    assert.equal(after[0].status, "open");
+  });
+
+  it("Given activity older than the cutoff, when pruned, then it is removed and recent activity is kept", async () => {
+    await repository.recordActivity({
+      occurredAt: at(100),
+      actorKind: "person",
+      actorName: "operator",
+      action: "Signed in",
+      target: null,
+      result: "Accepted",
+      apiCall: null,
+    });
+    await repository.recordActivity({
+      occurredAt: at(1),
+      actorKind: "person",
+      actorName: "operator",
+      action: "Signed in",
+      target: null,
+      result: "Accepted",
+      apiCall: null,
+    });
+
+    const removed = await repository.pruneHistory({
+      reportsBefore: CUTOFF,
+      activityBefore: CUTOFF,
+      signInAttemptsBefore: CUTOFF,
+    });
+
+    assert.equal(removed.activity, 1);
+    assert.equal((await repository.listActivity(100)).length, 1);
+  });
+});

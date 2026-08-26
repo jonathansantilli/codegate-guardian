@@ -1,6 +1,6 @@
 CREATE TABLE "ActivityEvent_v1" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"occurredAt" timestamp NOT NULL,
+	"occurredAt" timestamp with time zone NOT NULL,
 	"actorKind" varchar NOT NULL,
 	"actorName" text NOT NULL,
 	"action" text NOT NULL,
@@ -17,9 +17,9 @@ CREATE TABLE "EnrolmentCode_v1" (
 	"maxUses" integer DEFAULT 1 NOT NULL,
 	"usedCount" integer DEFAULT 0 NOT NULL,
 	"createdBy" text NOT NULL,
-	"createdAt" timestamp NOT NULL,
-	"expiresAt" timestamp NOT NULL,
-	"revokedAt" timestamp,
+	"createdAt" timestamp with time zone NOT NULL,
+	"expiresAt" timestamp with time zone NOT NULL,
+	"revokedAt" timestamp with time zone,
 	CONSTRAINT "EnrolmentCode_v1_code_key" UNIQUE("code")
 );
 --> statement-breakpoint
@@ -28,7 +28,7 @@ CREATE TABLE "FindingAcknowledgement_v1" (
 	"hostId" uuid NOT NULL,
 	"fingerprint" text NOT NULL,
 	"acknowledgedBy" text NOT NULL,
-	"acknowledgedAt" timestamp NOT NULL,
+	"acknowledgedAt" timestamp with time zone NOT NULL,
 	"note" text,
 	CONSTRAINT "FindingAcknowledgement_v1_host_fingerprint_key" UNIQUE("hostId","fingerprint")
 );
@@ -41,9 +41,9 @@ CREATE TABLE "FindingSuppression_v1" (
 	"ruleId" text,
 	"reason" text NOT NULL,
 	"createdBy" text NOT NULL,
-	"createdAt" timestamp NOT NULL,
-	"expiresAt" timestamp,
-	"revokedAt" timestamp
+	"createdAt" timestamp with time zone NOT NULL,
+	"expiresAt" timestamp with time zone,
+	"revokedAt" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "Host_v1" (
@@ -56,14 +56,14 @@ CREATE TABLE "Host_v1" (
 	"owner" text,
 	"team" text,
 	"agentVersion" text,
-	"firstSeenAt" timestamp NOT NULL,
-	"lastSeenAt" timestamp NOT NULL,
-	"revokedAt" timestamp,
+	"firstSeenAt" timestamp with time zone NOT NULL,
+	"lastSeenAt" timestamp with time zone NOT NULL,
+	"revokedAt" timestamp with time zone,
 	"revokedBy" text,
 	"agentTokenHash" text,
-	"enrolledAt" timestamp,
+	"enrolledAt" timestamp with time zone,
 	"enrolmentOpen" boolean DEFAULT false NOT NULL,
-	"enrolmentOpenedAt" timestamp,
+	"enrolmentOpenedAt" timestamp with time zone,
 	CONSTRAINT "Host_v1_machine_id_key" UNIQUE("machineId"),
 	CONSTRAINT "Host_v1_agent_token_key" UNIQUE("agentTokenHash")
 );
@@ -81,10 +81,10 @@ CREATE TABLE "HostFinding_v1" (
 	"filePath" text,
 	"contentHash" text,
 	"line" integer,
-	"column" integer,
+	"columnNumber" integer,
 	"description" text NOT NULL,
 	"evidence" text,
-	"owasp" json NOT NULL,
+	"owasp" jsonb NOT NULL,
 	"cwe" text,
 	"confidence" text,
 	"fixable" boolean,
@@ -103,20 +103,20 @@ CREATE TABLE "HostInventoryItem_v1" (
 	"path" text NOT NULL,
 	"exists" boolean NOT NULL,
 	"contentHash" text,
-	"riskSurface" json NOT NULL,
+	"riskSurface" jsonb NOT NULL,
 	"resolvedAgainst" text
 );
 --> statement-breakpoint
 CREATE TABLE "HostReport_v1" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"hostId" uuid NOT NULL,
-	"receivedAt" timestamp NOT NULL,
-	"collectedAt" timestamp NOT NULL,
+	"receivedAt" timestamp with time zone NOT NULL,
+	"collectedAt" timestamp with time zone NOT NULL,
 	"kbVersion" text,
 	"itemsTotal" integer DEFAULT 0 NOT NULL,
 	"findingsReported" boolean DEFAULT false NOT NULL,
-	"toolsDetected" json NOT NULL,
-	"createdAt" timestamp NOT NULL
+	"toolsDetected" jsonb NOT NULL,
+	"createdAt" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "Policy_v1" (
@@ -128,27 +128,25 @@ CREATE TABLE "Policy_v1" (
 	"version" integer DEFAULT 1 NOT NULL,
 	"enabled" boolean DEFAULT true NOT NULL,
 	"createdBy" text NOT NULL,
-	"createdAt" timestamp NOT NULL,
-	"updatedAt" timestamp NOT NULL,
+	"createdAt" timestamp with time zone NOT NULL,
+	"updatedAt" timestamp with time zone NOT NULL,
 	CONSTRAINT "Policy_v1_name_key" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "SignInAttempt_v1" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"identifier" text NOT NULL,
-	"windowStart" timestamp NOT NULL,
+	"windowStart" timestamp with time zone NOT NULL,
 	"failures" integer DEFAULT 0 NOT NULL,
 	CONSTRAINT "SignInAttempt_v1_identifier_window_unique" UNIQUE("identifier","windowStart")
 );
 --> statement-breakpoint
-CREATE TABLE "User" (
+CREATE TABLE "User_v1" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"email" varchar(64) NOT NULL,
-	"password" varchar(64),
-	"name" text,
-	"image" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"email" varchar(254) NOT NULL,
+	"password" text,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "User_email_key" UNIQUE("email")
 );
 --> statement-breakpoint

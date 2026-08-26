@@ -459,6 +459,28 @@ export type FleetRepository = {
   }): Promise<void>;
   listActivity(limit?: number): Promise<ActivityRecord[]>;
   /**
+   * Deletes history older than the given cutoffs, and returns what went.
+   *
+   * Reports are the thing that grows: every machine writes one on every
+   * check-in, for ever. Their inventory items and findings cascade with them.
+   *
+   * Two reports per machine are never deleted regardless of age — its latest,
+   * which is where lastSeenAt and the current inventory come from, and its
+   * latest findings-bearing one, which is what the whole finding lifecycle is
+   * derived from. Removing that second one would not lose history; it would
+   * make every finding on that machine disappear, and a console that shows a
+   * compromised machine as clean is worse than one that shows nothing.
+   */
+  pruneHistory(input: {
+    reportsBefore: Date;
+    activityBefore: Date;
+    signInAttemptsBefore: Date;
+  }): Promise<{
+    reports: number;
+    activity: number;
+    signInAttempts: number;
+  }>;
+  /**
    * Saves a policy, or reports that the name is taken.
    *
    * Names are unique because they are how an operator refers to a rule; a

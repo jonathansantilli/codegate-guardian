@@ -30,7 +30,7 @@ describe("testcontainer-pg harness", () => {
     // The tables the console actually needs, so a broken migration chain
     // fails here rather than at the first check-in.
     for (const table of [
-      "User",
+      "User_v1",
       "Host_v1",
       "HostReport_v1",
       "HostInventoryItem_v1",
@@ -68,17 +68,17 @@ describe("testcontainer-pg harness", () => {
 
   it("resetDatabase truncates user data without dropping schema", async () => {
     await harness.client`
-      INSERT INTO "User" (email, password) VALUES ('harness-test@example.com', 'x')
+      INSERT INTO "User_v1" (email, password) VALUES ('harness-test@example.com', 'x')
     `;
     const [beforeReset] = await harness.client<{ count: number }[]>`
-      SELECT COUNT(*)::int AS count FROM "User"
+      SELECT COUNT(*)::int AS count FROM "User_v1"
     `;
     assert.equal(beforeReset.count, 1);
 
     await harness.resetDatabase();
 
     const [afterReset] = await harness.client<{ count: number }[]>`
-      SELECT COUNT(*)::int AS count FROM "User"
+      SELECT COUNT(*)::int AS count FROM "User_v1"
     `;
     assert.equal(afterReset.count, 0);
 

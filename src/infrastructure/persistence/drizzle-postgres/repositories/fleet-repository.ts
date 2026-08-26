@@ -6,6 +6,8 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -51,6 +53,7 @@ import {
   hostInventoryItem,
   hostReport,
   policy,
+  signInAttempt,
 } from "../schema";
 
 // Postgres caps a statement at 65535 bound parameters; inventory rows bind
@@ -351,7 +354,8 @@ export class DrizzleFleetRepository implements FleetRepository {
             filePath: finding.filePath,
             contentHash: finding.contentHash,
             line: finding.line,
-            column: finding.column,
+            // Wire field is `column`; the DB column is columnNumber.
+            columnNumber: finding.column,
             description: finding.description,
             evidence: finding.evidence,
             owasp: finding.owasp ?? [],
@@ -719,7 +723,7 @@ export class DrizzleFleetRepository implements FleetRepository {
         contentHash: hostFinding.contentHash,
         evidence: hostFinding.evidence,
         line: hostFinding.line,
-        column: hostFinding.column,
+        column: hostFinding.columnNumber,
       })
       .from(hostFinding)
       .where(
@@ -1307,7 +1311,7 @@ export class DrizzleFleetRepository implements FleetRepository {
         contentHash: hostFinding.contentHash,
         evidence: hostFinding.evidence,
         line: hostFinding.line,
-        column: hostFinding.column,
+        column: hostFinding.columnNumber,
         reportId: hostFinding.reportId,
         collectedAt: hostReport.collectedAt,
         isLatest: sql<boolean>`(${hostFinding.reportId} = ${latest.id})`,
@@ -1678,6 +1682,61 @@ export class DrizzleFleetRepository implements FleetRepository {
         throttleKey: `${action}:${reason}:${actorName ?? ""}:${bucket}`,
       })
       .onConflictDoNothing({ target: activityEvent.throttleKey });
+  }
+
+  async pruneHistory({
+    reportsBefore,
+    activityBefore,
+    signInAttemptsBefore,
+  }: {
+    reportsBefore: Date;
+    activityBefore: Date;
+    signInAttemptsBefore: Date;
+  }): Promise<{ reports: number; activity: number; signInAttempts: number }> {
+    // The two reports per host that must survive any cutoff: the latest, and
+    // the latest that carried findings. Derived status reads the second one,
+    // so deleting it would not trim history — it would report every machine
+    // clean. Computed in SQL so the set cannot drift between the check and
+    // the delete.
+    const keep = this.db
+      .select({ id: hostReport.id })
+      .from(hostReport)
+      .where(
+        sql`${hostReport.id} in (
+          select distinct on ("hostId") id from "HostReport_v1"
+          order by "hostId", "receivedAt" desc, "collectedAt" desc, id desc
+        ) or ${hostReport.id} in (
+          select distinct on ("hostId") id from "HostReport_v1"
+          where "findingsReported" = true
+          order by "hostId", "receivedAt" desc, "collectedAt" desc, id desc
+        )`
+      );
+
+    const removedReports = await this.db
+      .delete(hostReport)
+      .where(
+        and(
+          lt(hostReport.receivedAt, reportsBefore),
+          notInArray(hostReport.id, keep)
+        )
+      )
+      .returning({ id: hostReport.id });
+
+    const removedActivity = await this.db
+      .delete(activityEvent)
+      .where(lt(activityEvent.occurredAt, activityBefore))
+      .returning({ id: activityEvent.id });
+
+    const removedAttempts = await this.db
+      .delete(signInAttempt)
+      .where(lt(signInAttempt.windowStart, signInAttemptsBefore))
+      .returning({ id: signInAttempt.id });
+
+    return {
+      reports: removedReports.length,
+      activity: removedActivity.length,
+      signInAttempts: removedAttempts.length,
+    };
   }
 
   async recordActivity(input: RecordActivityInput): Promise<void> {

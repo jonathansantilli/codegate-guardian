@@ -219,7 +219,7 @@ function count(table) {
 }
 
 console.log(`Dropping everything in ${containerLabel(CONTAINER)}/${DATABASE}:`);
-console.log(`  ${count("User")} account(s), ${count("Host_v1")} machine(s)`);
+console.log(`  ${count("User_v1")} account(s), ${count("Host_v1")} machine(s)`);
 
 psql("drop schema public cascade; create schema public;");
 psql("drop schema if exists drizzle cascade;");

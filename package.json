@@ -27,7 +27,8 @@
     "test:unit:coverage": "c8 --reporter=text --reporter=lcov --include='src/domain/**/*.ts' --include='src/application/**/*.ts' pnpm test:unit",
     "test:integration": "tsx --test 'tests/integration/**/*.test.ts'",
     "test:e2e": "export PLAYWRIGHT=True && pnpm exec playwright test",
-    "fresh": "node scripts/fresh-install.mjs"
+    "fresh": "node scripts/fresh-install.mjs",
+    "prune": "npx tsx scripts/prune-history.ts"
   },
   "dependencies": {
     "bcrypt-ts": "^5.0.2",

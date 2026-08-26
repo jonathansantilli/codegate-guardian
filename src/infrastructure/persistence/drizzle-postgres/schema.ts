@@ -3,7 +3,7 @@ import {
   boolean,
   index,
   integer,
-  json,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -14,15 +14,28 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable(
-  "User",
+  // _v1 like every other table. This one kept the bare name because it is the
+  // single table that survived the chat application this repository grew from.
+  "User_v1",
   {
     id: uuid("id").primaryKey().notNull().defaultRandom(),
-    email: varchar("email", { length: 64 }).notNull(),
-    password: varchar("password", { length: 64 }),
-    name: text("name"),
-    image: text("image"),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+    /**
+     * Sized to the RFC 5321 maximum. The template this grew from used
+     * varchar(64), which silently rejects addresses that are perfectly legal.
+     */
+    email: varchar("email", { length: 254 }).notNull(),
+    /**
+     * A bcrypt hash is 60 characters, which fit varchar(64) with four to
+     * spare — until the cost prefix or the algorithm changes. Text costs
+     * nothing here and removes a limit nobody chose.
+     */
+    password: text("password"),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     // Sign-in reads the first row for an address, so a second account sharing
@@ -51,8 +64,8 @@ export const host = pgTable(
     owner: text("owner"),
     team: text("team"),
     agentVersion: text("agentVersion"),
-    firstSeenAt: timestamp("firstSeenAt").notNull(),
-    lastSeenAt: timestamp("lastSeenAt").notNull(),
+    firstSeenAt: timestamp("firstSeenAt", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("lastSeenAt", { withTimezone: true }).notNull(),
     /**
      * When this machine's enrolment was withdrawn.
      *
@@ -60,7 +73,7 @@ export const host = pgTable(
      * which keeps running and keeps trying. What is left here is the last
      * thing it said before the door was closed.
      */
-    revokedAt: timestamp("revokedAt"),
+    revokedAt: timestamp("revokedAt", { withTimezone: true }),
     revokedBy: text("revokedBy"),
     /**
      * sha256 of the token this machine reports with, issued at enrolment.
@@ -72,7 +85,7 @@ export const host = pgTable(
      * fleet credentials.
      */
     agentTokenHash: text("agentTokenHash"),
-    enrolledAt: timestamp("enrolledAt"),
+    enrolledAt: timestamp("enrolledAt", { withTimezone: true }),
     /**
      * Whether an operator has opened this machine to enrolment.
      *
@@ -94,7 +107,7 @@ export const host = pgTable(
      * that stays open forever is one anybody holding a live enrolment code
      * can walk into, and a cohort code is held by every machine in the cohort.
      */
-    enrolmentOpenedAt: timestamp("enrolmentOpenedAt"),
+    enrolmentOpenedAt: timestamp("enrolmentOpenedAt", { withTimezone: true }),
   },
   (table) => ({
     machineIdKey: unique("Host_v1_machine_id_key").on(table.machineId),
@@ -115,15 +128,15 @@ export const hostReport = pgTable(
     hostId: uuid("hostId")
       .notNull()
       .references(() => host.id, { onDelete: "cascade" }),
-    receivedAt: timestamp("receivedAt").notNull(),
-    collectedAt: timestamp("collectedAt").notNull(),
+    receivedAt: timestamp("receivedAt", { withTimezone: true }).notNull(),
+    collectedAt: timestamp("collectedAt", { withTimezone: true }).notNull(),
     kbVersion: text("kbVersion"),
     itemsTotal: integer("itemsTotal").notNull().default(0),
     // Whether this report carried a findings list at all. An inventory-only
     // report asserts nothing about findings, so it must not resolve any.
     findingsReported: boolean("findingsReported").notNull().default(false),
-    toolsDetected: json("toolsDetected").notNull(),
-    createdAt: timestamp("createdAt").notNull(),
+    toolsDetected: jsonb("toolsDetected").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
   },
   (table) => ({
     hostIdx: index("HostReport_v1_host_idx").on(table.hostId),
@@ -152,7 +165,7 @@ export const hostInventoryItem = pgTable(
     path: text("path").notNull(),
     exists: boolean("exists").notNull(),
     contentHash: text("contentHash"),
-    riskSurface: json("riskSurface").notNull(),
+    riskSurface: jsonb("riskSurface").notNull(),
     resolvedAgainst: text("resolvedAgainst"),
   },
   (table) => ({
@@ -189,10 +202,16 @@ export const hostFinding = pgTable(
     // Ties the finding to the exact bytes it was found in.
     contentHash: text("contentHash"),
     line: integer("line"),
-    column: integer("column"),
+    /**
+     * Named columnNumber rather than column: the bare word is a SQL keyword,
+     * which works only because Drizzle quotes every identifier and bites the
+     * first person to write the query by hand. The wire field the agent sends
+     * is still `column`; the mapping is in the repository.
+     */
+    columnNumber: integer("columnNumber"),
     description: text("description").notNull(),
     evidence: text("evidence"),
-    owasp: json("owasp").notNull(),
+    owasp: jsonb("owasp").notNull(),
     cwe: text("cwe"),
     confidence: text("confidence"),
     fixable: boolean("fixable"),
@@ -226,7 +245,9 @@ export const findingAcknowledgement = pgTable(
       .references(() => host.id, { onDelete: "cascade" }),
     fingerprint: text("fingerprint").notNull(),
     acknowledgedBy: text("acknowledgedBy").notNull(),
-    acknowledgedAt: timestamp("acknowledgedAt").notNull(),
+    acknowledgedAt: timestamp("acknowledgedAt", {
+      withTimezone: true,
+    }).notNull(),
     note: text("note"),
   },
   (table) => ({
@@ -259,10 +280,10 @@ export const findingSuppression = pgTable(
     ruleId: text("ruleId"),
     reason: text("reason").notNull(),
     createdBy: text("createdBy").notNull(),
-    createdAt: timestamp("createdAt").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
     /** Null means indefinite — visible as such, never hidden. */
-    expiresAt: timestamp("expiresAt"),
-    revokedAt: timestamp("revokedAt"),
+    expiresAt: timestamp("expiresAt", { withTimezone: true }),
+    revokedAt: timestamp("revokedAt", { withTimezone: true }),
   },
   (table) => ({
     fingerprintIdx: index("FindingSuppression_v1_fingerprint_idx").on(
@@ -289,9 +310,9 @@ export const enrolmentCode = pgTable(
     maxUses: integer("maxUses").notNull().default(1),
     usedCount: integer("usedCount").notNull().default(0),
     createdBy: text("createdBy").notNull(),
-    createdAt: timestamp("createdAt").notNull(),
-    expiresAt: timestamp("expiresAt").notNull(),
-    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revokedAt", { withTimezone: true }),
   },
   (table) => ({
     codeKey: unique("EnrolmentCode_v1_code_key").on(table.code),
@@ -311,7 +332,7 @@ export const activityEvent = pgTable(
   "ActivityEvent_v1",
   {
     id: uuid("id").primaryKey().notNull().defaultRandom(),
-    occurredAt: timestamp("occurredAt").notNull(),
+    occurredAt: timestamp("occurredAt", { withTimezone: true }).notNull(),
     actorKind: varchar("actorKind", {
       enum: ["person", "service", "agent", "system"],
     }).notNull(),
@@ -361,8 +382,8 @@ export const policy = pgTable(
     version: integer("version").notNull().default(1),
     enabled: boolean("enabled").notNull().default(true),
     createdBy: text("createdBy").notNull(),
-    createdAt: timestamp("createdAt").notNull(),
-    updatedAt: timestamp("updatedAt").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
   },
   (table) => ({
     nameKey: unique("Policy_v1_name_key").on(table.name),
@@ -387,7 +408,7 @@ export const signInAttempt = pgTable(
     /** Lowercased email. Never the password, and never a hash of one. */
     identifier: text("identifier").notNull(),
     /** Start of the fixed window this count belongs to. */
-    windowStart: timestamp("windowStart").notNull(),
+    windowStart: timestamp("windowStart", { withTimezone: true }).notNull(),
     failures: integer("failures").notNull().default(0),
   },
   (table) => ({
