@@ -56,7 +56,7 @@ services:
     # the network. Use `docker compose exec postgres psql -U postgres` to
     # reach it, or change this to "5432:5432" if you really need a host port.
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
