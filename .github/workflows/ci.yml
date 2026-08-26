@@ -85,8 +85,10 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
+        # Same host port the compose stack uses, so a contributor copying
+        # POSTGRES_URL from here gets one that works locally.
         ports:
-          - 5432:5432
+          - 15432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s
@@ -94,7 +96,7 @@ jobs:
           --health-retries 10
     env:
       AUTH_SECRET: ci-test-auth-secret-ci-test-auth-secret-ci
-      POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      POSTGRES_URL: postgresql://postgres:postgres@localhost:15432/postgres
       NEXT_PUBLIC_BASE_PATH: ""
       # Without this the ingest endpoint is closed, so the agent tests would
       # be asserting the wrong refusal.

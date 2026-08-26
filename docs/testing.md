@@ -53,7 +53,7 @@ app's. The password it uses is generated once and kept in the gitignored
 Running locally against the compose stack:
 
 ```bash
-export POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/postgres
+export POSTGRES_URL=postgresql://postgres:postgres@localhost:15432/postgres
 export SETUP_TOKEN=<anything>
 export AGENT_INGEST_TOKEN=<anything>
 export AUTH_SECRET=<anything>

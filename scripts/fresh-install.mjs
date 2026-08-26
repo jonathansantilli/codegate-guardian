@@ -16,12 +16,66 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const CONTAINER =
-  process.env.POSTGRES_CONTAINER ?? "codegate-guardian-postgres";
 const DATABASE = process.env.POSTGRES_DB ?? "postgres";
 
 function docker(args, options = {}) {
   return execFileSync("docker", args, { encoding: "utf8", ...options }).trim();
+}
+
+/**
+ * Finds this checkout's Postgres container.
+ *
+ * Asked of compose rather than assumed from a fixed name: the containers are
+ * namespaced by project, so a second checkout gets different names, and
+ * guessing would either miss it or — worse — find the other one and drop the
+ * wrong database. POSTGRES_CONTAINER overrides for anything unusual.
+ */
+function resolveContainer() {
+  if (process.env.POSTGRES_CONTAINER) {
+    return process.env.POSTGRES_CONTAINER;
+  }
+  // Asked of Docker by the labels compose stamps, not of `docker compose ps`:
+  // that command interpolates every service's variables, including the app's
+  // required AUTH_SECRET, so it fails here for a reason that has nothing to
+  // do with finding a container. The working directory is what makes this
+  // precise — it is this checkout's Postgres, not another copy's.
+  try {
+    const id = docker([
+      "ps",
+      "--quiet",
+      "--filter",
+      `label=com.docker.compose.project.working_dir=${process.cwd()}`,
+      "--filter",
+      "label=com.docker.compose.service=postgres",
+    ])
+      .split("\n")[0]
+      .trim();
+    if (id) {
+      return id;
+    }
+  } catch {
+    // Docker unavailable; fall through to the error below
+  }
+  return null;
+}
+
+const CONTAINER = resolveContainer();
+
+/** The container's name, for messages: an id tells the reader nothing. */
+function containerLabel(id) {
+  try {
+    return docker(["inspect", "--format", "{{.Name}}", id]).replace(/^\//, "");
+  } catch {
+    return id;
+  }
+}
+
+if (!CONTAINER) {
+  console.error(
+    "No running Postgres for this checkout. Start the stack first:\n" +
+      "  docker compose up -d postgres"
+  );
+  process.exit(1);
 }
 
 function psql(sql, database = DATABASE) {
@@ -37,16 +91,6 @@ function psql(sql, database = DATABASE) {
     "-c",
     sql,
   ]);
-}
-
-try {
-  docker(["inspect", CONTAINER], { stdio: ["ignore", "pipe", "ignore"] });
-} catch {
-  console.error(
-    `No container named "${CONTAINER}". Start the stack first:\n` +
-      "  docker compose up -d"
-  );
-  process.exit(1);
 }
 
 // A published port on localhost is the marker of a dev stack. Refusing
@@ -159,7 +203,7 @@ if (target.status === "unknown") {
       `Cannot tell which database the app uses: ${target.why}.\n\n` +
       "This script drops a database, so not knowing is a reason to stop rather\n" +
       "than to guess. Set POSTGRES_URL to the local stack and run it again:\n" +
-      "  POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/postgres pnpm fresh"
+      "  POSTGRES_URL=postgresql://postgres:postgres@localhost:15432/postgres pnpm fresh"
   );
   process.exit(1);
 }
@@ -174,7 +218,7 @@ function count(table) {
   }
 }
 
-console.log(`Dropping everything in ${CONTAINER}/${DATABASE}:`);
+console.log(`Dropping everything in ${containerLabel(CONTAINER)}/${DATABASE}:`);
 console.log(`  ${count("User")} account(s), ${count("Host_v1")} machine(s)`);
 
 psql("drop schema public cascade; create schema public;");

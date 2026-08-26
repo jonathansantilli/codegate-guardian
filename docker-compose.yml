@@ -1,4 +1,8 @@
-name: codegate-guardian
+# Deliberately no `name:` and no `container_name:`. Compose derives the
+# project from this directory, which is already codegate-guardian, and names
+# containers under it — so a second checkout elsewhere gets its own set
+# instead of taking over this one's. Pinning either made two copies of this
+# repository fight over the same containers.
 
 services:
   app:
@@ -7,7 +11,6 @@ services:
       dockerfile: docker/Dockerfile
       target: runner
     image: codegate-guardian:local
-    container_name: codegate-guardian-app
     restart: unless-stopped
     depends_on:
       postgres:
@@ -34,7 +37,6 @@ services:
       dockerfile: docker/Dockerfile
       target: migrate
     image: codegate-guardian-migrate:local
-    container_name: codegate-guardian-migrate
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,19 +46,22 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: codegate-guardian-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-    # Loopback only. This database holds the fleet inventory and every
-    # machine's token hash, and the compose credentials are the well-known
-    # postgres/postgres — publishing it on 0.0.0.0 would put all of that on
-    # the network. Use `docker compose exec postgres psql -U postgres` to
-    # reach it, or change this to "5432:5432" if you really need a host port.
+    # Loopback only, and deliberately not 5432. This database holds the fleet
+    # inventory and every machine's token hash, and the compose credentials
+    # are the well-known postgres/postgres — publishing that on 0.0.0.0 would
+    # put all of it on the network.
+    #
+    # The host port is 15432 because 5432 is where everyone else's Postgres
+    # already is: bringing this stack up beside another project should not be
+    # a port conflict to debug. Inside the compose network it is still 5432,
+    # which is what the app connects to. Override with POSTGRES_PORT.
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
