@@ -68,5 +68,11 @@ tooling and its findings, which is worth protecting on its own.
   `AUTH_SECRET` and restart — that invalidates every existing session.
 - **Serve it over TLS.** Session cookies and agent tokens both cross the wire;
   the proxy expects the scheme it issued cookies under.
+- **The console is published on loopback by default.** `docker compose up`
+  binds it to `127.0.0.1`, so a fresh instance is not reachable from the
+  network during the window before anyone has claimed it — which is exactly
+  when reaching the port is most of what stands in the way. Agents on other
+  machines cannot reach it until you set `APP_BIND=0.0.0.0`, which is a
+  deliberate step to take after you have registered.
 - **Keep it on an internal network.** Nothing in the design assumes a public
   internet deployment.

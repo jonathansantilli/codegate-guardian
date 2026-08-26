@@ -23,13 +23,22 @@ services:
     environment:
       APP_URL: ${APP_URL:-http://localhost:3000}
       AUTH_SECRET: "${AUTH_SECRET:?AUTH_SECRET is required - generate one with 'openssl rand -base64 32'}"
-      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/postgres
       # Agents present this to check in. Absent means ingest is closed.
       AGENT_INGEST_TOKEN: ${AGENT_INGEST_TOKEN:-}
       # Required to claim a fresh instance; see .env.example.
       SETUP_TOKEN: ${SETUP_TOKEN:-}
+    # Loopback by default. The window between `up` and an operator claiming
+    # the instance is the one moment reaching the port is most of what stands
+    # in the way, and defaulting to 0.0.0.0 means a laptop on shared wifi
+    # publishes an unclaimed security console to the network.
+    #
+    # Agents on other machines do need to reach it, so exposing it is a real
+    # requirement — just a deliberate one. Set APP_BIND=0.0.0.0 once you have
+    # claimed the instance, and prefer a TLS-terminating reverse proxy in
+    # front over publishing this container directly.
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
 
   migrate:
     build:
@@ -41,7 +50,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/postgres
     restart: "no"
 
   postgres:
@@ -49,7 +58,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: postgres
     # Loopback only, and deliberately not 5432. This database holds the fleet
     # inventory and every machine's token hash, and the compose credentials

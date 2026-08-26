@@ -77,6 +77,25 @@ networked host that window belongs to whoever finds it first. The token means
 it belongs to whoever deployed it. Registration closes behind the first
 operator, and the token is no longer used.
 
+## Letting agents reach it
+
+The compose stack publishes the console on `127.0.0.1` only. That is
+deliberate: between `docker compose up` and someone claiming the instance,
+reaching the port is most of what stands in the way, and a laptop on shared
+wifi should not be publishing an unclaimed security console.
+
+It also means **no other machine can enrol until you widen it**. Once you have
+registered as the operator:
+
+```bash
+echo "APP_BIND=0.0.0.0" >> .env
+docker compose up -d
+```
+
+Prefer putting a TLS-terminating reverse proxy in front of it over publishing
+the container directly — session cookies and agent tokens both cross the wire,
+and `APP_URL` is the address enrolling machines are told to report to.
+
 ## Enrolling a machine
 
 Enrolment codes are minted in the console under **API & access**, and are
