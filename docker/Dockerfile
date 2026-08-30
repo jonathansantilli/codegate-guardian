@@ -39,6 +39,11 @@ COPY . .
 # values never reach the runtime image.
 ENV AUTH_SECRET=build-time-placeholder-not-a-real-secret
 ENV POSTGRES_URL=postgresql://build:build@127.0.0.1:5432/build
+# The front page is prerendered, so the waitlist form key has to be present
+# now rather than at runtime. It is a public form id, not a secret — it ships
+# in the HTML either way. Unset simply means the form is not rendered.
+ARG WAITLIST_FORM_KEY=""
+ENV WAITLIST_FORM_KEY=${WAITLIST_FORM_KEY}
 RUN pnpm build
 
 # --------------------------------------------------------------------------

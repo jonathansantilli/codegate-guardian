@@ -171,6 +171,7 @@ Everything else has a working default; see `.env.example` for the full list.
 | `SETUP_TOKEN` | **Required to claim a fresh instance.** Unset means it cannot be claimed. |
 | `POSTGRES_URL` | Any standard-wire-protocol Postgres. |
 | `APP_URL` | The absolute URL this instance is served from. |
+| `WAITLIST_FORM_KEY` | Optional. LaunchList key behind the front page's hosted-Guardian waitlist. Read at **build** time, since `/` is prerendered; unset means no form. |
 
 ## Access
 

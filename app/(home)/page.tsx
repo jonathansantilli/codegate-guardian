@@ -1,9 +1,11 @@
 import {
   ActivityIcon,
   ArrowRightIcon,
+  ArrowUpRightIcon,
   BoxesIcon,
   DatabaseIcon,
   EyeOffIcon,
+  GithubIcon,
   KeyRoundIcon,
   LaptopIcon,
   LockIcon,
@@ -43,6 +45,36 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
+
+const REPOS: { name: string; role: string; body: string; href: string }[] = [
+  {
+    name: "codegate",
+    role: "The agent",
+    body: "Runs on each developer machine. Inventories every skill, MCP server, rules file and config it finds, scans them, and reports what it saw.",
+    href: "https://github.com/jonathansantilli/codegate",
+  },
+  {
+    name: "codegate-guardian",
+    role: "This console",
+    body: "Receives those reports, derives findings from them, and shows the fleet. The server you are reading this on.",
+    href: "https://github.com/jonathansantilli/codegate-guardian",
+  },
+];
+
+/**
+ * The hosted waitlist, posted straight to LaunchList as a plain form.
+ *
+ * Deliberately not their embed widget: that would load third-party script on
+ * every visit, and this page tells you a few paragraphs further up that the
+ * console talks to Postgres and nothing else. A native POST keeps that true —
+ * nothing leaves the browser until a visitor types an address and submits,
+ * which is the one moment they have asked for it to.
+ *
+ * Unset means the form is not rendered at all, which is the safe default: a
+ * form with no key would post nowhere, and a form with someone else's key
+ * would post to someone else's list.
+ */
+const WAITLIST_KEY = process.env.WAITLIST_FORM_KEY;
 
 const SURFACES: { icon: typeof LaptopIcon; title: string; body: string }[] = [
   {
@@ -379,7 +411,8 @@ export default function Page() {
             {[
               { href: "#how", label: "How it works" },
               { href: "#shows", label: "What it shows" },
-              { href: "#limits", label: "Limits" },
+              { href: "#source", label: "Open source" },
+              { href: "#hosted", label: "Hosted" },
             ].map((item) => (
               <Link
                 className="hidden rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground md:block"
@@ -627,6 +660,104 @@ export default function Page() {
           </div>
         </section>
 
+        <section
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
+          id="source"
+        >
+          <div className="flex flex-col gap-4">
+            <p className="hm-eyebrow text-muted-foreground">Open source</p>
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
+              Every line of it, on GitHub.
+            </h2>
+            <p className="max-w-2xl text-muted-foreground leading-relaxed">
+              MIT licensed, both halves. A tool that reads what is on your
+              developers&rsquo; machines is a tool you should be able to read
+              back &mdash; so the agent that does the reading and the console
+              that stores it are the same code you can audit, fork and run
+              yourself. Nothing here asks to be taken on trust.
+            </p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {REPOS.map((repo) => (
+              <a
+                className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-6 transition-colors hover:border-foreground/25"
+                href={repo.href}
+                key={repo.name}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2.5">
+                    <GithubIcon className="size-4 text-muted-foreground" />
+                    <span className="font-mono text-sm">{repo.name}</span>
+                  </span>
+                  <ArrowUpRightIcon className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                </div>
+                <span className="hm-eyebrow text-muted-foreground">
+                  {repo.role}
+                </span>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {repo.body}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section
+          className="border-border/60 border-b py-20 lg:py-24"
+          id="hosted"
+        >
+          <div className="hm-invert grid gap-10 rounded-2xl p-8 md:p-12 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:gap-16">
+            <div className="flex flex-col gap-4">
+              <p className="hm-eyebrow opacity-60">Hosted</p>
+              <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
+                Or let us run it for you.
+              </h2>
+              <p className="max-w-2xl leading-relaxed opacity-75">
+                Self-hosting Guardian means a container, a Postgres, a
+                certificate and somebody to keep all three patched. If you want
+                the console without the operations, we are building a hosted
+                version &mdash; the same code, under the same constraint: it
+                still never sends anything to a machine.
+              </p>
+            </div>
+
+            {WAITLIST_KEY ? (
+              <div className="flex flex-col gap-3">
+                <form
+                  action={`https://getlaunchlist.com/s/${WAITLIST_KEY}`}
+                  className="flex w-full flex-col gap-3 sm:flex-row"
+                  method="post"
+                >
+                  <input name="_source" type="hidden" value="guardian-home" />
+                  <input
+                    aria-label="Email address"
+                    autoComplete="email"
+                    className="hm-invert-field h-11 min-w-0 flex-1 rounded-lg px-4 text-sm outline-none"
+                    name="email"
+                    placeholder="you@company.com"
+                    required
+                    type="email"
+                  />
+                  <button
+                    className="hm-invert-button h-11 shrink-0 rounded-lg px-5 font-medium text-sm transition-opacity hover:opacity-90"
+                    type="submit"
+                  >
+                    Join the waitlist
+                  </button>
+                </form>
+                <p className="text-xs leading-relaxed opacity-60">
+                  Your address goes to LaunchList, who run the waitlist, and is
+                  used for nothing but telling you when hosted Guardian is
+                  ready. Nothing else on this page contacts anyone.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
         <section className="py-16 lg:py-20">
           <div className="flex flex-col items-start gap-6 rounded-xl border border-border bg-card p-8 md:flex-row md:items-center md:justify-between md:p-10">
             <div className="flex max-w-xl flex-col gap-2">
@@ -652,7 +783,7 @@ export default function Page() {
 
       <footer className="border-border/60 border-t bg-muted/20">
         <div className="mx-auto w-full max-w-7xl px-6 py-14 md:px-8">
-          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+          <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
             <div className="flex flex-col gap-4">
               <Wordmark />
               <p className="max-w-xs text-muted-foreground text-sm leading-relaxed">
@@ -668,6 +799,19 @@ export default function Page() {
                   { href: "#shows", label: "What it shows" },
                   { href: "#how", label: "How it works" },
                   { href: "#limits", label: "Deliberate limits" },
+                ],
+              },
+              {
+                heading: "Source",
+                links: [
+                  {
+                    href: "https://github.com/jonathansantilli/codegate",
+                    label: "codegate",
+                  },
+                  {
+                    href: "https://github.com/jonathansantilli/codegate-guardian",
+                    label: "codegate-guardian",
+                  },
                 ],
               },
               {

@@ -10,6 +10,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       target: runner
+      args:
+        # Baked in at build time: the front page is static. Rebuild to change.
+        WAITLIST_FORM_KEY: ${WAITLIST_FORM_KEY:-}
     image: codegate-guardian:local
     restart: unless-stopped
     depends_on:

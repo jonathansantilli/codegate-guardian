@@ -67,3 +67,35 @@
     animation: none;
   }
 }
+
+/*
+ * The hosted panel.
+ *
+ * The one loud element on the page, and it stays inside the achromatic rule
+ * by inverting rather than reaching for a brand colour: ink becomes ground.
+ * It reads as emphatic in both themes without spending the colour that means
+ * danger everywhere else here.
+ */
+.hm-invert {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.hm-invert-field {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid transparent;
+}
+
+.hm-invert-field::placeholder {
+  color: var(--muted-foreground);
+}
+
+.hm-invert-field:focus-visible {
+  border-color: var(--ring);
+}
+
+.hm-invert-button {
+  background: var(--background);
+  color: var(--foreground);
+}
