@@ -49,6 +49,15 @@ export const SEVERITIES = [
   "INFO",
 ] as const;
 const MAX_FINDINGS = 5000;
+/**
+ * Hard ceilings on offered content, independent of the collection policy.
+ *
+ * The policy is an operator's setting and can be edited; these bound what the
+ * endpoint will parse at all, so a mis-set policy cannot turn a check-in into
+ * an unbounded upload. The 8 MiB body cap still sits above both.
+ */
+const MAX_CONTENT_BYTES = 1_048_576;
+const MAX_CONTENTS = 1000;
 
 /**
  * A finding as the codegate scanner emits it, narrowed to what the console
@@ -90,6 +99,23 @@ export const inventorySummarySchema = z.object({
   items: z.array(inventoryItemSchema).max(MAX_ITEMS).default([]),
 });
 
+/**
+ * Artifact bytes, offered only when the server's collection policy asks for
+ * them. The entry names a hash and carries text, and nothing else: what the
+ * artifact IS — its risk surfaces, which tool it belongs to — is read from the
+ * inventory item in this same report that carries the same hash.
+ *
+ * That is on purpose. A separate risk-surface field here would be a second
+ * claim about the same artifact, and the server would have to decide which to
+ * believe. Correlating instead means an agent cannot dress a settings file up
+ * as a rules file without also lying in its inventory, where the same lie is
+ * visible on the machine's own page.
+ */
+export const artifactContentSchema = z.object({
+  sha256: z.string().regex(CONTENT_HASH),
+  content: z.string().max(MAX_CONTENT_BYTES),
+});
+
 export const agentReportPayloadSchema = z.object({
   agent: z.object({
     /** Opaque, agent-generated, stable for the life of the machine. */
@@ -111,9 +137,15 @@ export const agentReportPayloadSchema = z.object({
    * server must not treat a missing list as a clean machine.
    */
   findings: z.array(findingSchema).max(MAX_FINDINGS).optional(),
+  /**
+   * Present only when this server's policy asked for content. Absent is the
+   * normal case and always will be for an agent that never enabled it.
+   */
+  contents: z.array(artifactContentSchema).max(MAX_CONTENTS).optional(),
 });
 
 export type AgentReportPayload = z.infer<typeof agentReportPayloadSchema>;
 export type InventoryItemPayload = z.infer<typeof inventoryItemSchema>;
 export type FindingPayload = z.infer<typeof findingSchema>;
+export type ArtifactContentPayload = z.infer<typeof artifactContentSchema>;
 export type Severity = (typeof SEVERITIES)[number];

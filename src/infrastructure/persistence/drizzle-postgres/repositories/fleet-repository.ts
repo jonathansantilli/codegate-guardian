@@ -17,6 +17,7 @@ import type {
   ArtifactVariant,
   ArtifactVariantDetail,
   AttentionRow,
+  CollectionPolicyRecord,
   EnrolHostResult,
   EnrolmentCodeSummary,
   FindingStatus,
@@ -32,8 +33,10 @@ import type {
   RecordActivityInput,
   RecordedReport,
   RecordHostReportInput,
+  SaveCollectionPolicyInput,
   SavePolicyInput,
   SavePolicyResult,
+  StoreArtifactContentInput,
   SuppressFindingInput,
   Suppression,
 } from "@/src/application/ports/fleet/fleet-repository";
@@ -45,6 +48,8 @@ import { severityRank } from "@/src/domain/scan/value-objects/severity";
 import type { DrizzleDb } from "../client";
 import {
   activityEvent,
+  artifactContent,
+  collectionPolicy,
   enrolmentCode,
   findingAcknowledgement,
   findingSuppression,
@@ -60,6 +65,14 @@ import {
 // well under a hundred each, so chunking keeps a large machine's report from
 // exceeding that in a single insert.
 const ITEM_INSERT_CHUNK = 500;
+
+// Content rows carry the artifact's whole text, so they are chunked far more
+// tightly than inventory rows: 500 of these is megabytes in one statement.
+const CONTENT_INSERT_CHUNK = 25;
+
+/** What an unconfigured instance reports, and refuses past. */
+const DEFAULT_MAX_ARTIFACT_BYTES = 262_144;
+const DEFAULT_MAX_ARTIFACTS_PER_REPORT = 200;
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
@@ -1892,5 +1905,99 @@ export class DrizzleFleetRepository implements FleetRepository {
       violatingMachines: row.enabled ? (byRule.get(row.ruleId) ?? 0) : 0,
       evaluatedMachines: evaluated,
     }));
+  }
+
+  /**
+   * The instance's collection policy, or the closed default.
+   *
+   * A fresh database has no row, and that has to read as "collect nothing"
+   * rather than as an error the caller might paper over — an instance nobody
+   * has configured must not be talked into sending files.
+   */
+  async getCollectionPolicy(): Promise<CollectionPolicyRecord> {
+    const [row] = await this.db.select().from(collectionPolicy).limit(1);
+    if (!row) {
+      return {
+        collectContent: false,
+        allowedRiskSurfaces: [],
+        maxBytesPerArtifact: DEFAULT_MAX_ARTIFACT_BYTES,
+        maxArtifactsPerReport: DEFAULT_MAX_ARTIFACTS_PER_REPORT,
+        updatedBy: null,
+        updatedAt: null,
+      };
+    }
+    return {
+      collectContent: row.collectContent,
+      allowedRiskSurfaces: row.allowedRiskSurfaces,
+      maxBytesPerArtifact: row.maxBytesPerArtifact,
+      maxArtifactsPerReport: row.maxArtifactsPerReport,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async saveCollectionPolicy(
+    input: SaveCollectionPolicyInput
+  ): Promise<CollectionPolicyRecord> {
+    // The unique constraint on `singleton` is what makes this an update of the
+    // one policy rather than a second one nobody reads.
+    const [row] = await this.db
+      .insert(collectionPolicy)
+      .values({ singleton: true, ...input })
+      .onConflictDoUpdate({
+        target: collectionPolicy.singleton,
+        set: {
+          collectContent: input.collectContent,
+          allowedRiskSurfaces: input.allowedRiskSurfaces,
+          maxBytesPerArtifact: input.maxBytesPerArtifact,
+          maxArtifactsPerReport: input.maxArtifactsPerReport,
+          updatedBy: input.updatedBy,
+          updatedAt: input.updatedAt,
+        },
+      })
+      .returning();
+
+    return {
+      collectContent: row.collectContent,
+      allowedRiskSurfaces: row.allowedRiskSurfaces,
+      maxBytesPerArtifact: row.maxBytesPerArtifact,
+      maxArtifactsPerReport: row.maxArtifactsPerReport,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async storeArtifactContents(
+    inputs: StoreArtifactContentInput[]
+  ): Promise<number> {
+    if (inputs.length === 0) {
+      return 0;
+    }
+
+    // Same hash, same bytes — that is what content addressing means. A second
+    // machine carrying the artifact has nothing to add, so the first writer
+    // wins and the rest are no-ops.
+    let stored = 0;
+    for (let i = 0; i < inputs.length; i += CONTENT_INSERT_CHUNK) {
+      const chunk = inputs.slice(i, i + CONTENT_INSERT_CHUNK);
+      const rows = await this.db
+        .insert(artifactContent)
+        .values(chunk)
+        .onConflictDoNothing({ target: artifactContent.contentHash })
+        .returning({ contentHash: artifactContent.contentHash });
+      stored += rows.length;
+    }
+    return stored;
+  }
+
+  async findStoredArtifactHashes(contentHashes: string[]): Promise<string[]> {
+    if (contentHashes.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select({ contentHash: artifactContent.contentHash })
+      .from(artifactContent)
+      .where(inArray(artifactContent.contentHash, contentHashes));
+    return rows.map((row) => row.contentHash);
   }
 }

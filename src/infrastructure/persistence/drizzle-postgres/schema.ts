@@ -421,3 +421,81 @@ export const signInAttempt = pgTable(
 );
 
 export type SignInAttempt = InferSelectModel<typeof signInAttempt>;
+
+/**
+ * What this server is willing to be sent, and nothing more.
+ *
+ * A single row, because this console has a single operator. It exists so the
+ * decision to accept artifact content is made once, deliberately, by a person
+ * — and so it defaults to "no". An instance nobody has configured collects
+ * hashes and findings, exactly as it always did.
+ *
+ * An agent reads this before a check-in and narrows itself to it. That is a
+ * declaration of what the server accepts, not an instruction the agent
+ * executes: the agent asks, on its own schedule, and applies its own ceiling
+ * to whatever it is told. The server still cannot reach a machine.
+ */
+export const collectionPolicy = pgTable(
+  "CollectionPolicy_v1",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    /**
+     * Always true, with a unique constraint on it. The database, not
+     * application code, is what guarantees there is exactly one policy.
+     */
+    singleton: boolean("singleton").notNull().default(true),
+    /** Off until an operator turns it on. */
+    collectContent: boolean("collectContent").notNull().default(false),
+    /**
+     * An artifact may be sent only if EVERY risk surface it declares appears
+     * here. Allowlisted rather than denylisted on purpose: a surface added to
+     * the agent's knowledge base later is refused until somebody widens this,
+     * rather than being uploaded because nobody remembered to exclude it.
+     */
+    allowedRiskSurfaces: jsonb("allowedRiskSurfaces")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    maxBytesPerArtifact: integer("maxBytesPerArtifact")
+      .notNull()
+      .default(262_144),
+    maxArtifactsPerReport: integer("maxArtifactsPerReport")
+      .notNull()
+      .default(200),
+    updatedBy: text("updatedBy"),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    onlyOne: unique("CollectionPolicy_v1_singleton_key").on(table.singleton),
+  })
+);
+
+export type CollectionPolicy = InferSelectModel<typeof collectionPolicy>;
+
+/**
+ * Artifact bytes, keyed by their hash and stored once for the whole fleet.
+ *
+ * Identity here has always been the content hash, which pays off directly:
+ * the same skill on forty machines is one row, analysed once, not forty
+ * copies of the same text. Nothing references a host, because the content is
+ * a property of the artifact rather than of any machine that happens to carry
+ * it — the inventory rows already say who has it.
+ */
+export const artifactContent = pgTable(
+  "ArtifactContent_v1",
+  {
+    contentHash: text("contentHash").primaryKey().notNull(),
+    byteLength: integer("byteLength").notNull(),
+    content: text("content").notNull(),
+    /** Union of the surfaces the artifact declared when it was accepted. */
+    riskSurface: jsonb("riskSurface").$type<string[]>().notNull(),
+    firstSeenAt: timestamp("firstSeenAt", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    firstSeenIdx: index("ArtifactContent_v1_first_seen_idx").on(
+      table.firstSeenAt
+    ),
+  })
+);
+
+export type ArtifactContent = InferSelectModel<typeof artifactContent>;

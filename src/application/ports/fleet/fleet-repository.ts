@@ -329,6 +329,41 @@ export type ActivityRecord = {
 
 export type RecordActivityInput = Omit<ActivityRecord, "id">;
 
+/**
+ * What this server is willing to be sent.
+ *
+ * Read by an agent before a check-in and re-applied here when one arrives:
+ * the agent narrowing itself is a courtesy that saves bandwidth, not a
+ * control. A client that ignores the policy is refused by the server that
+ * published it.
+ */
+export type CollectionPolicyRecord = {
+  collectContent: boolean;
+  /** An artifact qualifies only if EVERY surface it declares is in here. */
+  allowedRiskSurfaces: string[];
+  maxBytesPerArtifact: number;
+  maxArtifactsPerReport: number;
+  updatedBy: string | null;
+  updatedAt: Date | null;
+};
+
+export type SaveCollectionPolicyInput = {
+  collectContent: boolean;
+  allowedRiskSurfaces: string[];
+  maxBytesPerArtifact: number;
+  maxArtifactsPerReport: number;
+  updatedBy: string;
+  updatedAt: Date;
+};
+
+export type StoreArtifactContentInput = {
+  contentHash: string;
+  byteLength: number;
+  content: string;
+  riskSurface: string[];
+  firstSeenAt: Date;
+};
+
 export type SavePolicyResult =
   | { outcome: "saved"; id: string }
   | { outcome: "name-taken" }
@@ -495,4 +530,19 @@ export type FleetRepository = {
     acknowledgedAt: Date;
     note?: string;
   }): Promise<void>;
+  /** Never null: an unconfigured instance reads as "collect nothing". */
+  getCollectionPolicy(): Promise<CollectionPolicyRecord>;
+  saveCollectionPolicy(
+    input: SaveCollectionPolicyInput
+  ): Promise<CollectionPolicyRecord>;
+  /**
+   * Stores artifact bytes, ignoring hashes already held.
+   *
+   * Content addressed by hash is immutable by definition, so a second machine
+   * carrying the same artifact has nothing new to add. Returns how many rows
+   * were genuinely new.
+   */
+  storeArtifactContents(inputs: StoreArtifactContentInput[]): Promise<number>;
+  /** Which of these hashes this server already holds bytes for. */
+  findStoredArtifactHashes(contentHashes: string[]): Promise<string[]>;
 };

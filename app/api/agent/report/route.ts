@@ -1,3 +1,4 @@
+import { acceptArtifactContent } from "@/lib/security/accept-artifact-content";
 import { extractBearerToken } from "@/lib/security/agent-token";
 import { hashMachineToken } from "@/lib/security/machine-token";
 import {
@@ -106,6 +107,18 @@ function toFindingInput(finding: FindingPayload): RecordFindingInput {
     fixable: finding.fixable ?? null,
     suppressed: finding.suppressed ?? false,
   };
+}
+
+/** Counts by reason, so one activity row says what was wrong rather than how much. */
+function summariseRefusals(refused: { reason: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const item of refused) {
+    counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(", ");
 }
 
 /**
@@ -239,6 +252,43 @@ export async function POST(request: Request) {
       findings: payload.findings?.map(toFindingInput),
     });
 
+    // Content is offered, never assumed. Every rule the agent applied before
+    // sending is applied again here, because the agent runs on a machine this
+    // server does not control and cannot vouch for.
+    let contentsStored = 0;
+    let contentsRefused = 0;
+    if (payload.contents?.length) {
+      const policy = await container.ports.fleet.getCollectionPolicy();
+      const decision = acceptArtifactContent(
+        payload.contents,
+        payload.inventory.items.map((item) => ({
+          sha256: item.sha256,
+          riskSurface: item.risk_surface,
+        })),
+        policy
+      );
+
+      contentsRefused = decision.refused.length;
+      contentsStored = await container.ports.fleet.storeArtifactContents(
+        decision.accepted.map((item) => ({ ...item, firstSeenAt: receivedAt }))
+      );
+
+      // An agent sending what the policy does not allow is worth an
+      // operator's attention: on a good day it is a stale agent that has not
+      // re-read the policy, and on a bad one it is not.
+      if (contentsRefused > 0) {
+        await container.ports.fleet.recordActivity({
+          occurredAt: receivedAt,
+          actorKind: "agent",
+          actorName: reporting.hostname,
+          action: "Offered content the policy does not allow",
+          target: `${contentsRefused} of ${payload.contents.length} refused: ${summariseRefusals(decision.refused)}`,
+          result: "Refused",
+          apiCall: "POST /api/agent/report",
+        });
+      }
+    }
+
     // A hostname is self-reported: the agent reads it off the machine, and a
     // compromised one can claim any string, including another machine's. The
     // report itself is safe — attribution comes from the token — but the
@@ -274,6 +324,11 @@ export async function POST(request: Request) {
       reportId,
       itemsAccepted: payload.inventory.items.length,
       findingsAccepted: payload.findings?.length ?? null,
+      // Stored counts only artifacts this server had not already seen, so a
+      // second machine carrying the same skill reports 0 stored and 0 refused
+      // — accepted, and already held.
+      contentsStored,
+      contentsRefused,
     });
   } catch (error) {
     console.error("Agent report ingest failed:", error);
