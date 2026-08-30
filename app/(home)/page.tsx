@@ -131,7 +131,8 @@ const STAGES: {
     title: "It reads, and it analyses",
     body: [
       "The agent walks the AI tooling it knows about \u2014 a versioned knowledge base of where each tool keeps its skills, rules, MCP servers and settings, in the project and in the home directory. Then it reads what it found and analyses the content.",
-      "Environment overrides, command execution, consent bypasses, instructions injected into rules files, symlink escapes, git hooks, and artifacts matched by hash against known-bad content. That pass is offline and deterministic by default: no network, same input, same answer. An opt-in deep scan goes further, examining MCP tool descriptions and instruction files for toxic flows.",
+      "Environment overrides, command execution, consent bypasses, instructions injected into rules files, symlink escapes, git hooks, and artifacts matched by hash against known-bad content. That pass is offline and deterministic by default \u2014 same input, same answer \u2014 and it needs no account and no model.",
+      "A deeper pass goes further: MCP tool descriptions, toxic chains where untrusted input can reach an exfiltration sink, registry metadata for the packages a server pulls. Most of that is deterministic too. The part that reads instruction files with a language model is opt-in, and today it runs on the machine, using whatever model access the developer already has.",
       "Every one of those steps is a read. Nothing on the machine is changed by scanning it \u2014 remediation is a separate command, it backs up what it touches, and it can be undone.",
     ],
   },
@@ -790,10 +791,16 @@ export default function Page() {
               </h2>
               <p className="max-w-2xl leading-relaxed opacity-75">
                 Self-hosting Guardian means a container, a Postgres, a
-                certificate and somebody to keep all three patched. If you want
-                the console without the operations, we are building a hosted
-                version &mdash; the same code, under the same constraint: it
-                still never sends anything to a machine.
+                certificate and somebody to keep all three patched. We are
+                building a hosted version that is the same code without the
+                operations &mdash; and that runs the model-backed deep pass
+                centrally, once per artifact rather than once per machine, so
+                fleet coverage stops depending on what each developer happens to
+                have installed.
+              </p>
+              <p className="max-w-2xl leading-relaxed opacity-75">
+                The constraint does not change. It still never sends anything to
+                a machine.
               </p>
             </div>
 
