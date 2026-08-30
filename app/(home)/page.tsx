@@ -1,6 +1,7 @@
 import {
   ActivityIcon,
   ArrowRightIcon,
+  ArrowUpFromLineIcon,
   ArrowUpRightIcon,
   BoxesIcon,
   DatabaseIcon,
@@ -9,8 +10,10 @@ import {
   KeyRoundIcon,
   LaptopIcon,
   LockIcon,
+  ScanSearchIcon,
   ScrollTextIcon,
   TriangleAlertIcon,
+  UserCheckIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -106,6 +109,51 @@ const SURFACES: { icon: typeof LaptopIcon; title: string; body: string }[] = [
     icon: KeyRoundIcon,
     title: "API & access",
     body: "The console is a client of its own API. Anything you can do here, a script can do with a session.",
+  },
+];
+
+/**
+ * What actually happens, in the order it happens.
+ *
+ * Written against the agent's own pipeline rather than from the pitch: layers
+ * 1 to 3 read and analyse on the machine, the check-in carries conclusions and
+ * hashes rather than files, and the server evaluates and waits for a person.
+ */
+const STAGES: {
+  icon: typeof ScanSearchIcon;
+  where: string;
+  title: string;
+  body: string[];
+}[] = [
+  {
+    icon: ScanSearchIcon,
+    where: "On the machine",
+    title: "It reads, and it analyses",
+    body: [
+      "The agent walks the AI tooling it knows about \u2014 a versioned knowledge base of where each tool keeps its skills, rules, MCP servers and settings, in the project and in the home directory. Then it reads what it found and analyses the content.",
+      "Environment overrides, command execution, consent bypasses, instructions injected into rules files, symlink escapes, git hooks, and artifacts matched by hash against known-bad content. That pass is offline and deterministic by default: no network, same input, same answer. An opt-in deep scan goes further, examining MCP tool descriptions and instruction files for toxic flows.",
+      "Every one of those steps is a read. Nothing on the machine is changed by scanning it \u2014 remediation is a separate command, it backs up what it touches, and it can be undone.",
+    ],
+  },
+  {
+    icon: ArrowUpFromLineIcon,
+    where: "On the wire",
+    title: "Conclusions, not contents",
+    body: [
+      "A check-in carries an inventory: for each artifact, which tool it belongs to, its kind and scope, where it lives, the risk surface it represents, and a sha256 of its bytes.",
+      "Alongside it go the findings the scan produced \u2014 rule, severity, category, which layer raised it, the file, and the specific lines that matched.",
+      "The files themselves stay on the machine. Guardian identifies an artifact by its hash, which is how it can tell two files apart without ever holding either one.",
+    ],
+  },
+  {
+    icon: UserCheckIcon,
+    where: "On the server",
+    title: "It evaluates. You decide",
+    body: [
+      "Guardian aggregates check-ins, derives each finding's status from report history, and evaluates your policies against what every machine reported.",
+      "What that produces is a judgement, not an action. The engine can tell you a skill looks malicious; it cannot tell you whether you allow it. That call belongs to a person \u2014 acknowledge a finding to take responsibility for it, or suppress it with a written reason that stays on the record.",
+      "Neither reaches the machine. And an acknowledgement does not close anything: a finding resolves only when a later report from that machine no longer carries it.",
+    ],
   },
 ];
 
@@ -409,7 +457,7 @@ export default function Page() {
           <Wordmark />
           <nav className="flex items-center gap-1">
             {[
-              { href: "#how", label: "How it works" },
+              { href: "#how-it-works", label: "How it works" },
               { href: "#shows", label: "What it shows" },
               { href: "#source", label: "Open source" },
               { href: "#hosted", label: "Hosted" },
@@ -453,7 +501,7 @@ export default function Page() {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="#how">How it works</Link>
+                <Link href="#how-it-works">How it works</Link>
               </Button>
             </div>
             <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 text-[13px] text-muted-foreground">
@@ -474,9 +522,12 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24">
+        <section
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
+          id="how-it-works"
+        >
           <div className="flex flex-col gap-4">
-            <p className="hm-eyebrow text-muted-foreground">The constraint</p>
+            <p className="hm-eyebrow text-muted-foreground">How it works</p>
             <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               This server never sends anything to a machine.
             </h2>
@@ -489,6 +540,28 @@ export default function Page() {
             </p>
           </div>
           <ReportFlow />
+
+          <div className="grid gap-5 border-border/60 border-t pt-10 lg:grid-cols-3">
+            {STAGES.map((stage) => (
+              <div className="flex flex-col gap-3" key={stage.where}>
+                <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+                  <stage.icon className="size-4" />
+                </span>
+                <p className="hm-eyebrow text-muted-foreground">
+                  {stage.where}
+                </p>
+                <h3 className="font-medium">{stage.title}</h3>
+                {stage.body.map((paragraph) => (
+                  <p
+                    className="text-muted-foreground text-sm leading-relaxed"
+                    key={paragraph.slice(0, 32)}
+                  >
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
         </section>
 
         <section
@@ -585,7 +658,7 @@ export default function Page() {
           id="how"
         >
           <div className="flex flex-col gap-4">
-            <p className="hm-eyebrow text-muted-foreground">How it works</p>
+            <p className="hm-eyebrow text-muted-foreground">Getting started</p>
             <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               From nothing to a reporting fleet.
             </h2>
@@ -795,9 +868,10 @@ export default function Page() {
               {
                 heading: "On this page",
                 links: [
+                  { href: "#how-it-works", label: "How it works" },
                   { href: "#identity", label: "Identity" },
                   { href: "#shows", label: "What it shows" },
-                  { href: "#how", label: "How it works" },
+                  { href: "#how", label: "Get started" },
                   { href: "#limits", label: "Deliberate limits" },
                 ],
               },
