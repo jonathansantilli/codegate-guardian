@@ -3,8 +3,14 @@ import { getToken } from "next-auth/jwt";
 import { isSecureRequest } from "./lib/security/request-protocol";
 import { AGENT_ROUTE_PREFIX } from "./src/shared/routes";
 
-/** Reachable without a session: everything else needs one. */
-const PUBLIC_PATHS = new Set(["/login", "/register"]);
+/**
+ * Reachable without a session: everything else needs one.
+ *
+ * "/" is the front page, and it is public because the sign-in screen links
+ * back to it. It reads nothing and shows nothing about this instance — it
+ * describes the product, which is already public knowledge.
+ */
+const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -60,8 +66,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signIn);
   }
 
+  // Signed in, the console is the destination — including from "/", which is
+  // the front page for people who do not have an account here. Sending them
+  // to "/" instead would now be a redirect to a public path, which loops.
   if (PUBLIC_PATHS.has(pathname)) {
-    return NextResponse.redirect(new URL(`${base}/`, request.url));
+    return NextResponse.redirect(new URL(`${base}/fleet`, request.url));
   }
 
   return NextResponse.next();

@@ -1,0 +1,60 @@
+/*
+ * The front page.
+ *
+ * The console carries a whole ported stylesheet because it came from a sealed
+ * design canvas. This page needs almost none of that — it is built from the
+ * app's own tokens, so it inherits both themes for free. The only thing the
+ * tokens cannot express is severity, and those values are lifted verbatim
+ * from fleet.css: a finding shown on this page is exactly the colour it will
+ * be once you are inside the console.
+ *
+ * That is also the page's whole colour rule. The palette is achromatic
+ * everywhere else, because in this product colour means danger and nothing
+ * else. Everything under .hm is scoped to this page and cannot leak.
+ */
+
+.hm {
+  --crit: #c1121f;
+  --crit-bg: #fef2f2;
+  --ok: #047857;
+  --ok-bg: #ecfdf5;
+}
+
+.dark .hm {
+  --crit: #f87171;
+  --crit-bg: oklch(0.55 0.15 25 / 0.16);
+  --ok: #34d399;
+  --ok-bg: oklch(0.6 0.12 160 / 0.16);
+}
+
+.hm-crit {
+  background: var(--crit-bg);
+  color: var(--crit);
+}
+
+.hm-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.hm-rule {
+  color: var(--crit);
+}
+
+/* The console's own section-label treatment, reused so the page reads as the
+   same product rather than a brochure bolted onto it. */
+.hm-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* globals.css defines fade-up unguarded; this page is the only place it runs
+   on load, so the guard lives with the usage. */
+@media (prefers-reduced-motion: reduce) {
+  .hm .fade-up,
+  .hm .fade-in {
+    animation: none;
+  }
+}
