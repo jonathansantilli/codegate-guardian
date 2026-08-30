@@ -1,6 +1,8 @@
-import { ArrowLeftIcon, ShieldCheckIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "sonner";
+
+import { GuardianMark } from "@/components/guardian-mark";
 
 /**
  * The sign-in frame.
@@ -46,9 +48,7 @@ export default function AuthLayout({
         </Link>
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-10">
           <div className="flex flex-col gap-2">
-            <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-              <ShieldCheckIcon className="size-4" />
-            </div>
+            <GuardianMark className="mb-2 size-8" />
             {children}
           </div>
         </div>
@@ -57,7 +57,7 @@ export default function AuthLayout({
       <div className="hidden flex-1 flex-col overflow-hidden pl-12 xl:flex">
         <div className="flex items-center gap-1.5 pt-8 text-[13px] text-muted-foreground/50">
           Powered by
-          <ShieldCheckIcon className="size-3.5" />
+          <GuardianMark className="size-3.5" />
           <span className="font-medium text-muted-foreground">CodeGate</span>
         </div>
         <div className="flex max-w-lg flex-1 flex-col justify-center gap-8 pr-12">

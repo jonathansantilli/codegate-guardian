@@ -37,9 +37,18 @@
   color: var(--ok);
 }
 
-.hm-rule {
-  color: var(--crit);
-}
+/*
+ * The blocked return path in the flow diagram.
+ *
+ * This is the one place colour is spent on something that is not a finding,
+ * and it earns it: a channel from this server to a machine is precisely the
+ * thing the product refuses to have, so the barrier reads as the hazard it
+ * prevents. The arrow itself stays muted — it is the barrier that is loud.
+ */
+/* The flow diagram reaches for --crit directly for the blocked return path,
+   which is the one mark on the page that is not a finding. It earns the
+   colour: a channel from this server to a machine is precisely the thing the
+   product refuses to have. */
 
 /* The console's own section-label treatment, reused so the page reads as the
    same product rather than a brochure bolted onto it. */

@@ -4,17 +4,16 @@ import {
   BoxesIcon,
   DatabaseIcon,
   EyeOffIcon,
-  FingerprintIcon,
   KeyRoundIcon,
   LaptopIcon,
   LockIcon,
   ScrollTextIcon,
-  ShieldCheckIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { GuardianMark } from "@/components/guardian-mark";
 import { Button } from "@/components/ui/button";
 import "./home.css";
 
@@ -32,17 +31,20 @@ import "./home.css";
  * straight to the console.
  */
 
+const DESCRIPTION =
+  "A self-hosted console for seeing what AI tooling your developers actually have installed, and which of it is dangerous.";
+
 export const metadata: Metadata = {
   title: "CodeGate Guardian",
-  description:
-    "A self-hosted console for seeing what AI tooling your developers actually have installed, and which of it is dangerous.",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "CodeGate Guardian",
+    description: DESCRIPTION,
+    type: "website",
+  },
 };
 
-const SURFACES: {
-  icon: typeof LaptopIcon;
-  title: string;
-  body: string;
-}[] = [
+const SURFACES: { icon: typeof LaptopIcon; title: string; body: string }[] = [
   {
     icon: LaptopIcon,
     title: "Machines",
@@ -82,23 +84,19 @@ const STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Claim the instance",
-    body: "The first operator registers with the setup token you generated. Registration then closes for good, so a networked instance cannot be claimed by whoever reaches the port first.",
+    body: "The first operator registers with the setup token you generated, so a networked instance cannot be claimed by whoever reaches the port first.",
   },
   {
     title: "Enrol a machine",
-    body: "Mint an enrolment code in the console and run two commands on the machine. It is issued its own reporting token — check-ins are identified by that token, not by the machine id in the request.",
+    body: "Mint a code, run two commands. The machine is issued its own reporting token — check-ins are identified by that token, not by the id in the request.",
   },
   {
     title: "Read the fleet",
-    body: "Every check-in writes a new report. Findings open when a machine reports them and resolve when it stops, so the next report is the evidence a fix landed.",
+    body: "Every check-in writes a report. Findings open when a machine reports them and resolve when it stops, so the next report is the evidence a fix landed.",
   },
 ];
 
-const LIMITS: {
-  icon: typeof LockIcon;
-  title: string;
-  body: string;
-}[] = [
+const LIMITS: { icon: typeof LockIcon; title: string; body: string }[] = [
   {
     icon: EyeOffIcon,
     title: "It cannot block anything",
@@ -107,7 +105,7 @@ const LIMITS: {
   {
     icon: LockIcon,
     title: "One instance, one operator",
-    body: "No roles, no user management, no way to add a second account. That is a deliberate limit rather than an oversight: a console that can add operators needs invitations, roles and an audit trail of who granted what, and none of that is built.",
+    body: "No roles, no user management, no second account. A deliberate limit rather than an oversight: a console that can add operators needs invitations, roles and an audit trail of who granted what, and none of that is built.",
   },
   {
     icon: DatabaseIcon,
@@ -116,82 +114,168 @@ const LIMITS: {
   },
 ];
 
-function BrandMark({ className = "" }: { className?: string }) {
+/** Illustrative, not real data — hence aria-hidden. */
+const INVENTORY_ROWS: {
+  name: string;
+  hash: string;
+  note: string;
+  critical?: boolean;
+}[] = [
+  { name: "skills/pr-review.md", hash: "3f9a1c72e8b4", note: "38 machines" },
+  { name: "mcp/filesystem.json", hash: "c41e0a99b7d3", note: "40 machines" },
+  {
+    name: "skills/deploy-helper.md",
+    hash: "0b7d44af19c2",
+    note: "Critical",
+    critical: true,
+  },
+  { name: "rules/commit-style.md", hash: "7ae2f018c95d", note: "12 machines" },
+  { name: "mcp/github.json", hash: "1d6b83ca420f", note: "31 machines" },
+];
+
+function Wordmark({ className }: { className?: string }) {
   return (
-    <span
-      className={`flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-foreground text-background ${className}`}
-    >
-      <ShieldCheckIcon className="size-3.5" />
+    <span className={`flex items-center gap-2.5 ${className ?? ""}`}>
+      <GuardianMark className="size-6 shrink-0" />
+      <span className="font-medium text-[15px] tracking-tight">
+        <span className="text-muted-foreground">CodeGate</span> Guardian
+      </span>
     </span>
   );
 }
 
 /**
- * The claim the whole product rests on, drawn rather than asserted: reports
- * travel one way. The absent return path is the point, so it is on the
- * diagram — struck through and unlabelled by an arrowhead it does not have.
+ * The hero's right-hand side: the console's own subject matter, at a glance.
+ * The point it makes is the page's thesis — a long quiet list with one thing
+ * in it that is not quiet, which is the only place colour appears up here.
+ */
+function InventoryPanel() {
+  return (
+    <div
+      aria-hidden="true"
+      className="overflow-hidden rounded-xl border border-border bg-card shadow-[var(--shadow-float)]"
+    >
+      <div className="flex items-center justify-between gap-3 border-border/60 border-b bg-muted/30 px-4 py-3">
+        <span className="flex items-center gap-2">
+          <GuardianMark className="size-4" />
+          <span className="font-medium text-[13px]">Inventory</span>
+        </span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          42 machines
+        </span>
+      </div>
+      <div className="flex flex-col divide-y divide-border/60">
+        {INVENTORY_ROWS.map((row) => (
+          <div
+            className="flex items-center justify-between gap-4 px-4 py-3"
+            key={row.hash}
+          >
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="truncate font-mono text-[12.5px]">
+                {row.name}
+              </span>
+              <span className="truncate font-mono text-[11px] text-muted-foreground">
+                sha256:{row.hash}
+                <span className="opacity-50">&hellip;</span>
+              </span>
+            </span>
+            {row.critical ? (
+              <span className="hm-crit inline-flex h-5 shrink-0 items-center rounded-full px-2 font-medium text-[11px]">
+                {row.note}
+              </span>
+            ) : (
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                {row.note}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-3 border-border/60 border-t bg-muted/30 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+        <span>1,284 artifacts</span>
+        <span>1 finding open</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The claim the whole product rests on, drawn rather than asserted.
+ *
+ * The return path is the point of the picture, so it is drawn as a real
+ * arrow — direction legible — and then stopped, rather than left as an
+ * ambiguous dotted line the eye reads as decoration.
  */
 function ReportFlow() {
   const nodes = [
-    { x: 1, label: "Developer machine", sub: "codegate agent" },
-    { x: 282, label: "Guardian", sub: "this server" },
-    { x: 563, label: "You", sub: "the console" },
+    { x: 30, label: "Developer machine", sub: "codegate agent" },
+    { x: 445, label: "Guardian", sub: "this server" },
+    { x: 860, label: "You", sub: "the console" },
   ];
 
   return (
-    <figure className="flex flex-col gap-4">
-      {/* Scaled to fit, it would render 13px labels at under 6px on a phone.
+    <figure className="flex flex-col gap-6">
+      {/* Scaled to fit a phone it would render its labels at a few pixels.
           Wide content scrolls in its own container instead. */}
-      <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+      <div className="-mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
         <svg
-          aria-label="A developer machine sends reports to Guardian, which shows them to you. Nothing travels from Guardian back to the machine."
-          className="h-auto w-full min-w-[600px] max-w-3xl text-foreground"
+          aria-label="A developer machine sends reports to Guardian, which shows them to you. The return path from Guardian to the machine is drawn blocked: it does not exist."
+          className="h-auto w-full min-w-[880px] text-foreground"
           role="img"
-          viewBox="0 0 760 168"
+          viewBox="0 0 1200 300"
         >
           <defs>
             <marker
               id="hm-arrow"
-              markerHeight="8"
+              markerHeight="10"
               markerUnits="userSpaceOnUse"
-              markerWidth="8"
+              markerWidth="10"
               orient="auto"
-              refX="7"
-              refY="4"
+              refX="8"
+              refY="5"
             >
-              <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--muted-foreground)" />
+            </marker>
+            <marker
+              id="hm-arrow-back"
+              markerHeight="13"
+              markerUnits="userSpaceOnUse"
+              markerWidth="13"
+              orient="auto"
+              refX="11"
+              refY="6.5"
+            >
+              <path d="M0,0 L13,6.5 L0,13 z" fill="var(--muted-foreground)" />
             </marker>
           </defs>
 
           {nodes.map((node) => (
             <g key={node.label}>
               <rect
-                fill="none"
-                height="58"
-                opacity="0.25"
-                rx="10"
-                stroke="currentColor"
-                width="196"
+                fill="var(--card)"
+                height="92"
+                rx="12"
+                stroke="var(--border)"
+                width="310"
                 x={node.x}
-                y="30"
+                y="48"
               />
               <text
                 fill="currentColor"
-                fontSize="13"
+                fontSize="18"
                 fontWeight="500"
                 textAnchor="middle"
-                x={node.x + 98}
-                y="54"
+                x={node.x + 155}
+                y="88"
               >
                 {node.label}
               </text>
               <text
-                fill="currentColor"
-                fontSize="11"
-                opacity="0.55"
+                fill="var(--muted-foreground)"
+                fontSize="13"
                 textAnchor="middle"
-                x={node.x + 98}
-                y="71"
+                x={node.x + 155}
+                y="110"
               >
                 {node.sub}
               </text>
@@ -200,85 +284,84 @@ function ReportFlow() {
 
           <line
             markerEnd="url(#hm-arrow)"
-            opacity="0.55"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            x1="205"
-            x2="272"
-            y1="59"
-            y2="59"
+            stroke="var(--muted-foreground)"
+            strokeWidth="2"
+            x1="352"
+            x2="431"
+            y1="94"
+            y2="94"
           />
           <text
-            fill="currentColor"
-            fontSize="11"
-            opacity="0.55"
+            fill="var(--muted-foreground)"
+            fontSize="14"
             textAnchor="middle"
-            x="239"
-            y="46"
+            x="392"
+            y="78"
           >
             reports
           </text>
 
           <line
             markerEnd="url(#hm-arrow)"
-            opacity="0.55"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            x1="486"
-            x2="553"
-            y1="59"
-            y2="59"
+            stroke="var(--muted-foreground)"
+            strokeWidth="2"
+            x1="767"
+            x2="846"
+            y1="94"
+            y2="94"
           />
           <text
-            fill="currentColor"
-            fontSize="11"
-            opacity="0.55"
+            fill="var(--muted-foreground)"
+            fontSize="14"
             textAnchor="middle"
-            x="520"
-            y="46"
+            x="807"
+            y="78"
           >
             shows
           </text>
 
+          {/* The absent channel. The arrowhead is what makes the direction
+              readable — without it the eye reads a dotted line as decoration.
+              The prohibition mark is what makes the direction false. */}
           <path
-            d="M380,88 L380,128 L99,128 L99,88"
+            d="M600 140 V220 H185 V158"
             fill="none"
-            opacity="0.3"
-            stroke="currentColor"
-            strokeDasharray="4 4"
-            strokeWidth="1.5"
+            markerEnd="url(#hm-arrow-back)"
+            opacity="0.8"
+            stroke="var(--muted-foreground)"
+            strokeDasharray="7 6"
+            strokeWidth="2"
+          />
+          <circle
+            cx="392"
+            cy="220"
+            fill="var(--background)"
+            r="15"
+            stroke="var(--crit)"
+            strokeWidth="2.5"
           />
           <line
-            opacity="0.8"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            x1="233"
-            x2="246"
-            y1="122"
-            y2="134"
-          />
-          <line
-            opacity="0.8"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            x1="246"
-            x2="233"
-            y1="122"
-            y2="134"
+            stroke="var(--crit)"
+            strokeLinecap="round"
+            strokeWidth="2.5"
+            x1="382"
+            x2="402"
+            y1="230"
+            y2="210"
           />
           <text
-            fill="currentColor"
-            fontSize="11"
-            opacity="0.55"
+            fill="var(--crit)"
+            fontSize="14"
+            fontWeight="500"
             textAnchor="middle"
-            x="239"
-            y="154"
+            x="392"
+            y="266"
           >
-            this direction does not exist
+            no commands, no configuration, no reach
           </text>
         </svg>
       </div>
-      <figcaption className="max-w-2xl text-muted-foreground text-sm leading-relaxed">
+      <figcaption className="max-w-2xl text-muted-foreground leading-relaxed">
         Revoking an enrolment stops Guardian accepting a machine&rsquo;s
         reports. It does not reach the machine.
       </figcaption>
@@ -288,79 +371,80 @@ function ReportFlow() {
 
 export default function Page() {
   return (
-    <div className="hm min-h-dvh bg-background text-foreground">
+    <div className="hm flex min-h-dvh flex-col bg-background text-foreground">
       <header className="sticky top-0 z-10 border-border/60 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-6 px-6">
-          <span className="flex items-center gap-2.5">
-            <BrandMark />
-            <span className="font-medium text-[15px] tracking-tight">
-              Guardian
-            </span>
-          </span>
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-6 px-6 md:px-8">
+          <Wordmark />
           <nav className="flex items-center gap-1">
-            <Link
-              className="hidden rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground sm:block"
-              href="#how"
-            >
-              How it works
-            </Link>
-            <Link
-              className="hidden rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground sm:block"
-              href="#limits"
-            >
-              Limits
-            </Link>
-            <Button asChild size="sm">
+            {[
+              { href: "#how", label: "How it works" },
+              { href: "#shows", label: "What it shows" },
+              { href: "#limits", label: "Limits" },
+            ].map((item) => (
+              <Link
+                className="hidden rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground md:block"
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <Button asChild className="ml-2" size="sm">
               <Link href="/login">Sign in</Link>
             </Button>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-6">
-        <section className="fade-up flex flex-col gap-7 border-border/60 border-b py-20 md:py-28">
-          <p className="hm-eyebrow text-muted-foreground">
-            Self-hosted &middot; Report-only
-          </p>
-          <h1 className="max-w-3xl text-balance font-semibold text-4xl tracking-tight md:text-5xl">
-            Know what AI tooling your developers actually have installed.
-          </h1>
-          <p className="max-w-2xl text-lg text-muted-foreground leading-relaxed">
-            The <span className="font-mono text-[15px]">codegate</span> agent
-            runs on each developer machine and inventories every skill, MCP
-            server, rules file and config it finds. It scans them and reports
-            what it saw. Guardian aggregates those reports and shows you which
-            of it is dangerous.
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <Button asChild size="lg">
-              <Link href="/login">
-                Sign in
-                <ArrowRightIcon data-icon="inline-end" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="#how">How it works</Link>
-            </Button>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 md:px-8">
+        <section className="fade-up grid items-center gap-14 border-border/60 border-b py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
+          <div className="flex flex-col gap-7">
+            <p className="hm-eyebrow text-muted-foreground">
+              Self-hosted &middot; Report-only
+            </p>
+            <h1 className="text-balance font-semibold text-4xl tracking-tight md:text-5xl">
+              Know what AI tooling your developers actually have installed.
+            </h1>
+            <p className="max-w-xl text-lg text-muted-foreground leading-relaxed">
+              The <span className="font-mono text-[15px]">codegate</span> agent
+              runs on each developer machine and inventories every skill, MCP
+              server, rules file and config it finds. It scans them and reports
+              what it saw. Guardian aggregates those reports and shows you which
+              of it is dangerous.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Button asChild size="lg">
+                <Link href="/login">
+                  Sign in
+                  <ArrowRightIcon data-icon="inline-end" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="#how">How it works</Link>
+              </Button>
+            </div>
+            <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 text-[13px] text-muted-foreground">
+              {[
+                "Postgres, and nothing else",
+                "No telemetry, no external API",
+                "MIT licensed",
+              ].map((fact) => (
+                <li className="flex items-center gap-2" key={fact}>
+                  <span className="size-[3px] rounded-full bg-muted-foreground/60" />
+                  {fact}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 text-[13px] text-muted-foreground">
-            {[
-              "Postgres, and nothing else",
-              "No telemetry, no analytics, no external API",
-              "MIT licensed",
-            ].map((fact) => (
-              <li className="flex items-center gap-2" key={fact}>
-                <span className="size-[3px] rounded-full bg-muted-foreground/60" />
-                {fact}
-              </li>
-            ))}
-          </ul>
+          <div className="hidden md:block">
+            <InventoryPanel />
+          </div>
         </section>
 
-        <section className="flex flex-col gap-8 border-border/60 border-b py-20">
+        <section className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24">
           <div className="flex flex-col gap-4">
             <p className="hm-eyebrow text-muted-foreground">The constraint</p>
-            <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight">
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               This server never sends anything to a machine.
             </h2>
             <p className="max-w-2xl text-muted-foreground leading-relaxed">
@@ -374,13 +458,13 @@ export default function Page() {
           <ReportFlow />
         </section>
 
-        <section className="flex flex-col gap-8 border-border/60 border-b py-20">
+        <section
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
+          id="identity"
+        >
           <div className="flex flex-col gap-4">
-            <p className="hm-eyebrow flex items-center gap-2 text-muted-foreground">
-              <FingerprintIcon className="size-3.5" />
-              Identity
-            </p>
-            <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight">
+            <p className="hm-eyebrow text-muted-foreground">Identity</p>
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               Identity is the content, not the name.
             </h2>
             <p className="max-w-2xl text-muted-foreground leading-relaxed">
@@ -391,7 +475,7 @@ export default function Page() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2">
             {[
               {
                 badge: "Known good",
@@ -407,11 +491,11 @@ export default function Page() {
               },
             ].map((artifact) => (
               <div
-                className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-6"
                 key={artifact.hash}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-mono text-[13px]">code-review.md</span>
+                  <span className="font-mono text-sm">code-review.md</span>
                   <span
                     className={`inline-flex h-5 items-center rounded-full px-2 font-medium text-xs ${artifact.tone}`}
                   >
@@ -429,32 +513,32 @@ export default function Page() {
             ))}
           </div>
 
-          <p className="max-w-2xl text-muted-foreground text-sm leading-relaxed">
+          <p className="max-w-2xl text-muted-foreground leading-relaxed">
             Same filename. Two artifacts, listed separately, tracked separately.
             Guardian will never show you one while you are looking at the other.
           </p>
         </section>
 
         <section
-          className="flex flex-col gap-8 border-border/60 border-b py-20"
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
           id="shows"
         >
           <div className="flex flex-col gap-4">
             <p className="hm-eyebrow text-muted-foreground">What it shows</p>
-            <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight">
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               Six surfaces, and the API behind every one of them.
             </h2>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {SURFACES.map((surface) => (
               <div
-                className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-6"
                 key={surface.title}
               >
-                <span className="flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
                   <surface.icon className="size-4" />
                 </span>
-                <h3 className="font-medium text-sm">{surface.title}</h3>
+                <h3 className="font-medium">{surface.title}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   {surface.body}
                 </p>
@@ -464,37 +548,35 @@ export default function Page() {
         </section>
 
         <section
-          className="flex flex-col gap-10 border-border/60 border-b py-20"
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
           id="how"
         >
           <div className="flex flex-col gap-4">
             <p className="hm-eyebrow text-muted-foreground">How it works</p>
-            <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight">
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               From nothing to a reporting fleet.
             </h2>
           </div>
 
-          <ol className="flex flex-col">
+          <ol className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((step, index) => (
               <li
-                className="flex gap-5 border-border/60 border-t py-6 first:border-t-0 first:pt-0"
+                className="flex flex-col gap-3 border-border/60 border-t pt-5"
                 key={step.title}
               >
-                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted/60 font-mono text-[11px] text-muted-foreground ring-1 ring-border/50">
+                <span className="flex size-7 items-center justify-center rounded-full bg-muted/60 font-mono text-[12px] text-muted-foreground ring-1 ring-border/50">
                   {index + 1}
                 </span>
-                <div className="flex flex-col gap-1.5">
-                  <h3 className="font-medium text-sm">{step.title}</h3>
-                  <p className="max-w-2xl text-muted-foreground text-sm leading-relaxed">
-                    {step.body}
-                  </p>
-                </div>
+                <h3 className="font-medium">{step.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {step.body}
+                </p>
               </li>
             ))}
           </ol>
 
-          <div className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-5">
-            <pre className="font-mono text-[12.5px] leading-relaxed">
+          <div className="overflow-x-auto rounded-xl border border-border bg-muted/40 p-6">
+            <pre className="font-mono text-[13px] leading-relaxed">
               <code>
                 <span className="text-muted-foreground">
                   # on the server{"\n"}
@@ -513,68 +595,122 @@ export default function Page() {
         </section>
 
         <section
-          className="flex flex-col gap-8 border-border/60 border-b py-20"
+          className="flex flex-col gap-10 border-border/60 border-b py-20 lg:py-24"
           id="limits"
         >
           <div className="flex flex-col gap-4">
             <p className="hm-eyebrow text-muted-foreground">
               Deliberate limits
             </p>
-            <h2 className="max-w-2xl text-balance font-semibold text-3xl tracking-tight">
+            <h2 className="max-w-3xl text-balance font-semibold text-3xl tracking-tight md:text-4xl">
               What it deliberately doesn&rsquo;t do.
             </h2>
             <p className="max-w-2xl text-muted-foreground leading-relaxed">
               Worth knowing before you deploy it, rather than after.
             </p>
           </div>
-          <div className="flex flex-col rounded-lg border border-border bg-card">
+          <div className="grid gap-5 md:grid-cols-3">
             {LIMITS.map((limit) => (
               <div
-                className="flex gap-4 border-border/60 border-t p-5 first:border-t-0"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-6"
                 key={limit.title}
               >
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
                   <limit.icon className="size-4" />
                 </span>
-                <div className="flex flex-col gap-1.5">
-                  <h3 className="font-medium text-sm">{limit.title}</h3>
-                  <p className="max-w-2xl text-muted-foreground text-sm leading-relaxed">
-                    {limit.body}
-                  </p>
-                </div>
+                <h3 className="font-medium">{limit.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {limit.body}
+                </p>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="flex flex-col items-start gap-6 py-20">
-          <h2 className="max-w-2xl text-balance font-semibold text-2xl tracking-tight">
-            Already running an instance?
-          </h2>
-          <p className="max-w-2xl text-muted-foreground leading-relaxed">
-            Sign in to the console. If nobody has claimed this one yet, sign-up
-            will ask for the setup token from the environment it was deployed
-            with &mdash; that token is what makes the first account yours.
-          </p>
-          <Button asChild size="lg">
-            <Link href="/login">
-              Sign in
-              <ArrowRightIcon data-icon="inline-end" />
-            </Link>
-          </Button>
+        <section className="py-16 lg:py-20">
+          <div className="flex flex-col items-start gap-6 rounded-xl border border-border bg-card p-8 md:flex-row md:items-center md:justify-between md:p-10">
+            <div className="flex max-w-xl flex-col gap-2">
+              <h2 className="text-balance font-semibold text-2xl tracking-tight">
+                Already running an instance?
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Sign in to the console. If nobody has claimed this one yet,
+                sign-up will ask for the setup token from the environment it was
+                deployed with &mdash; that token is what makes the first account
+                yours.
+              </p>
+            </div>
+            <Button asChild className="shrink-0" size="lg">
+              <Link href="/login">
+                Sign in
+                <ArrowRightIcon data-icon="inline-end" />
+              </Link>
+            </Button>
+          </div>
         </section>
       </main>
 
-      <footer className="border-border/60 border-t">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-          <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            <BrandMark className="opacity-90" />
-            CodeGate Guardian
-          </span>
-          <span className="text-[13px] text-muted-foreground">
-            MIT licensed &middot; Self-hosted &middot; Receives, evaluates,
-            displays
-          </span>
+      <footer className="border-border/60 border-t bg-muted/20">
+        <div className="mx-auto w-full max-w-7xl px-6 py-14 md:px-8">
+          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            <div className="flex flex-col gap-4">
+              <Wordmark />
+              <p className="max-w-xs text-muted-foreground text-sm leading-relaxed">
+                {DESCRIPTION}
+              </p>
+            </div>
+
+            {[
+              {
+                heading: "On this page",
+                links: [
+                  { href: "#identity", label: "Identity" },
+                  { href: "#shows", label: "What it shows" },
+                  { href: "#how", label: "How it works" },
+                  { href: "#limits", label: "Deliberate limits" },
+                ],
+              },
+              {
+                heading: "Console",
+                links: [
+                  { href: "/login", label: "Sign in" },
+                  { href: "/register", label: "Claim an instance" },
+                ],
+              },
+            ].map((column) => (
+              <div className="flex flex-col gap-4" key={column.heading}>
+                <h2 className="hm-eyebrow text-muted-foreground">
+                  {column.heading}
+                </h2>
+                <ul className="flex flex-col gap-2.5">
+                  {column.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        className="text-muted-foreground text-sm transition-colors hover:text-foreground"
+                        href={link.href}
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+
+            <div className="flex flex-col gap-4">
+              <h2 className="hm-eyebrow text-muted-foreground">This build</h2>
+              <ul className="flex flex-col gap-2.5 text-muted-foreground text-sm">
+                <li>MIT licensed</li>
+                <li>Self-hosted</li>
+                <li>No telemetry</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-12 flex flex-col gap-2 border-border/60 border-t pt-6 text-muted-foreground text-xs sm:flex-row sm:items-center sm:justify-between">
+            <span>CodeGate Guardian</span>
+            <span>Receives, evaluates, displays. Never sends.</span>
+          </div>
         </div>
       </footer>
     </div>

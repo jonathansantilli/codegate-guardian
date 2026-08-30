@@ -1,0 +1,9 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <rect fill="#121212" height="24" rx="5" width="24" />
+  <path
+    clip-rule="evenodd"
+    d="M12 4.2 L18.8 6.7 V12.3 C18.8 16 15.9 19 12 20.1 C8.1 19 5.2 16 5.2 12.3 V6.7 Z M8.6 11.5 h1.9 v4.1 h-1.9 Z M11.05 9.4 h1.9 v6.2 h-1.9 Z M13.5 12.6 h1.9 v3 h-1.9 Z"
+    fill="#fafafa"
+    fill-rule="evenodd"
+  />
+</svg>
