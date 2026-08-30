@@ -433,7 +433,7 @@ export default function Page() {
         <section className="fade-up grid items-center gap-14 border-border/60 border-b py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col gap-7">
             <p className="hm-eyebrow text-muted-foreground">
-              Self-hosted &middot; Report-only
+              Self-hosted or cloud-based &middot; Report-only
             </p>
             <h1 className="text-balance font-semibold text-4xl tracking-tight md:text-5xl">
               Know what AI tooling your developers actually have installed.
