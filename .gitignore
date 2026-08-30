@@ -37,8 +37,32 @@ tsconfig.tsbuildinfo
 # Agent workspace: settings here can hold tokens
 .claude/
 
-# Working notes kept out of the repository
-docs/plans/
-docs/*-handoff.md
-docs/*-tasks.md
+# docs/ is default-deny, matching the codegate client.
+#
+# Listing what may be committed is the only version of this rule that holds:
+# a denylist of plan/checklist/handoff names needs somebody to have thought of
+# the name first, and two planning documents had to be purged from this
+# history precisely because nobody had. docs/ is for architectural
+# documentation — how the thing works, for someone reading the code. Anything
+# describing how it got built goes stale the day it is written and does not
+# belong in a published repository.
+#
+# To add a document, un-ignore it here, deliberately.
+/docs/**
+!/docs/
+!/docs/testing.md
+
+# Planning artefacts, wherever somebody puts them.
+*hackathon*
+*-handoff.md
+*-tasks.md
+*-checklist.md
+*-plan.md
+PLAN.md
+PLANS.md
+TASKS.md
+TODO.md
+ROADMAP.md
+NOTES.md
+SCRATCH.md
 tests/e2e/.auth/
