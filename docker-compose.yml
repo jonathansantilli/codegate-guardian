@@ -11,8 +11,8 @@ services:
       dockerfile: docker/Dockerfile
       target: runner
       args:
-        # Baked in at build time: the front page is static. Rebuild to change.
-        WAITLIST_FORM_KEY: ${WAITLIST_FORM_KEY:-}
+        # Inlined into the sign-in screen at build time. Rebuild to change.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
     image: codegate-guardian:local
     restart: unless-stopped
     depends_on:

@@ -6,11 +6,12 @@ import { AGENT_ROUTE_PREFIX } from "./src/shared/routes";
 /**
  * Reachable without a session: everything else needs one.
  *
- * "/" is the front page, and it is public because the sign-in screen links
- * back to it. It reads nothing and shows nothing about this instance — it
- * describes the product, which is already public knowledge.
+ * "/" is deliberately not here. It used to serve the product's front page,
+ * which has moved to its own deployment; what is left behind it is the
+ * console, and an unauthenticated visitor should be sent to sign in rather
+ * than shown a redirect into a screen they cannot see.
  */
-const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
+const PUBLIC_PATHS = new Set(["/login", "/register"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
