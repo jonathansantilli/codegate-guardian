@@ -7,6 +7,10 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  # So a run can be started by hand — needed the day this repository went
+  # public, when every prior run had failed for want of Actions minutes and
+  # there was nothing to push to prove it was fixed.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
