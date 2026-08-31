@@ -66,3 +66,6 @@ ROADMAP.md
 NOTES.md
 SCRATCH.md
 tests/e2e/.auth/
+
+# Written by semantic-release so the container job knows what was cut.
+.release-version

@@ -10,27 +10,69 @@
           "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
         },
         "releaseRules": [
-          { "breaking": true, "release": "major" },
-          { "type": "feat", "release": "minor" },
-          { "type": "fix", "release": "patch" },
-          { "type": "docs", "release": "patch" },
-          { "type": "refactor", "release": "patch" },
-          { "type": "perf", "release": "patch" },
-          { "type": "test", "release": "patch" },
-          { "type": "build", "release": "patch" },
-          { "type": "ci", "release": "patch" },
-          { "type": "style", "release": "patch" },
-          { "type": "chore", "release": "patch" },
-          { "type": "revert", "release": "patch" }
+          {
+            "breaking": true,
+            "release": "major"
+          },
+          {
+            "type": "feat",
+            "release": "minor"
+          },
+          {
+            "type": "fix",
+            "release": "patch"
+          },
+          {
+            "type": "docs",
+            "release": "patch"
+          },
+          {
+            "type": "refactor",
+            "release": "patch"
+          },
+          {
+            "type": "perf",
+            "release": "patch"
+          },
+          {
+            "type": "test",
+            "release": "patch"
+          },
+          {
+            "type": "build",
+            "release": "patch"
+          },
+          {
+            "type": "ci",
+            "release": "patch"
+          },
+          {
+            "type": "style",
+            "release": "patch"
+          },
+          {
+            "type": "chore",
+            "release": "patch"
+          },
+          {
+            "type": "revert",
+            "release": "patch"
+          }
         ]
       }
     ],
     "@semantic-release/release-notes-generator",
-    ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version --allow-same-version"
+        "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version --allow-same-version",
+        "publishCmd": "echo ${nextRelease.version} > .release-version"
       }
     ],
     [

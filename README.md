@@ -284,10 +284,50 @@ footer gives a major. A subject that does not parse produces no release, which
 is why pull request titles are linted: they become the commit message when a
 pull request is squashed.
 
-Nothing is published to a registry. This is a self-hosted console, `private:
-true`, and there is nowhere to publish it to. What a release gives you is a tag
-to check out and notes saying what changed before you upgrade an instance
-holding your fleet's data.
+No npm package is published — this is a self-hosted console, `private: true`,
+and there is nowhere to publish it to. What a release gives you is a tag, notes
+saying what changed before you upgrade an instance holding your fleet's data,
+and container images.
+
+### Container images
+
+Every release publishes both images the compose stack runs, for `linux/amd64`
+and `linux/arm64`:
+
+```
+ghcr.io/jonathansantilli/codegate-guardian:1.0.0
+ghcr.io/jonathansantilli/codegate-guardian-migrate:1.0.0
+```
+
+Also tagged `1.0`, `1` and `latest`. Pin to the full version in anything you
+deploy: `latest` will move under you, and this console holds your fleet's
+inventory.
+
+The migrate image is the one-shot container that applies migrations before the
+console starts. Publishing only the console would leave you building half of it
+yourself.
+
+To run a published release instead of building from source, point the compose
+stack at the registry:
+
+```bash
+docker compose up -d   # after setting `image:` on both services
+```
+
+### Bill of materials
+
+Each image carries an SBOM and a build provenance attestation in the registry,
+readable with any tool that understands them:
+
+```bash
+docker buildx imagetools inspect \
+  ghcr.io/jonathansantilli/codegate-guardian:1.0.0 --format '{{ json .SBOM }}'
+```
+
+The same SBOM is attached to the GitHub release as an SPDX file, for reading
+rather than tooling. On a console that receives what your developers have
+installed, being able to enumerate what the console itself is made of is not a
+formality.
 
 Versions start at 1.0.0. The `3.1.0` this repository carried until then was
 inherited verbatim from the Vercel AI Chatbot template it was forked from,

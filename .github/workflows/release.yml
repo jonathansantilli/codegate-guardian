@@ -26,6 +26,11 @@ jobs:
     name: tag and release
     runs-on: ubuntu-22.04
     timeout-minutes: 20
+    outputs:
+      # Empty when this push produced no release, which is the common case:
+      # most pushes are chores that change no behaviour worth versioning.
+      version: ${{ steps.released.outputs.version }}
+      released: ${{ steps.released.outputs.released }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -69,3 +74,111 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec semantic-release
+
+      # semantic-release writes .release-version only when it publishes, so
+      # the file's absence is the signal that nothing was cut.
+      - name: Record what was released
+        id: released
+        run: |
+          if [ -f .release-version ]; then
+            version="$(cat .release-version)"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "Released ${version}"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "No release for this push"
+          fi
+
+  # Separate from the release so a slow image build never delays the tag and
+  # the notes. If this fails the version still exists and can be built again.
+  publish-image:
+    name: publish container images
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The compose stack runs both: the console, and the one-shot
+          # container that applies migrations before it starts. Publishing
+          # only the console would leave anyone deploying from the registry
+          # still having to build half of it themselves.
+          - target: runner
+            image: codegate-guardian
+          - target: migrate
+            image: codegate-guardian-migrate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: ${{ matrix.target }}
+          # arm64 as well as amd64: people self-host this on Apple Silicon and
+          # on Graviton, and an image they cannot run is not a release.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Attached to the image in the registry, so what is deployed carries
+          # its own bill of materials and a record of where it was built.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+      # The registry attestation above is for tooling. This is the same thing
+      # as a file a person can download from the release page and read.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.release.outputs.version }}
+          format: spdx-json
+          artifact-name: sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json
+          output-file: sbom-${{ matrix.image }}.spdx.json
+
+      - name: Attach SBOM to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mv sbom-${{ matrix.image }}.spdx.json \
+             sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json
+          gh release upload "v${{ needs.release.outputs.version }}" \
+            "sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json" \
+            --clobber
