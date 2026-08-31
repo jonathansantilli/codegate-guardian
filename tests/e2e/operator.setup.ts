@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test as setup } from "@playwright/test";
 
@@ -38,8 +38,13 @@ function operatorPassword(): string {
     return process.env.E2E_OPERATOR_PASSWORD;
   }
 
-  if (existsSync(CREDENTIAL_FILE)) {
+  // Read first and handle absence, rather than asking whether it exists and
+  // then reading: between those two calls the file can be created or removed,
+  // and the version that checks first is the one that throws when it is.
+  try {
     return JSON.parse(readFileSync(CREDENTIAL_FILE, "utf8")).password;
+  } catch {
+    // No credential stored yet, or it is unreadable. Either way, make one.
   }
 
   const password = `e2e-${randomBytes(24).toString("base64url")}`;
