@@ -269,6 +269,31 @@ docker compose up -d --build   # rebuilds the schema
 Then http://localhost:3000 asks for `SETUP_TOKEN` again. `pnpm fresh` refuses
 to run against anything that does not look like a local stack.
 
+## Releases
+
+Versions are derived from the commit history, not written by hand. A push to
+`main` runs [semantic-release](https://semantic-release.gitbook.io/): it reads
+the commit subjects since the last tag, decides whether that is a patch, a
+minor or a major, writes `CHANGELOG.md`, tags the commit and cuts a GitHub
+release.
+
+That makes the commit subject the thing that decides whether a change ships.
+Subjects follow [Conventional Commits](https://www.conventionalcommits.org/) —
+`feat:` gives a minor, `fix:` and the rest a patch, and a `BREAKING CHANGE:`
+footer gives a major. A subject that does not parse produces no release, which
+is why pull request titles are linted: they become the commit message when a
+pull request is squashed.
+
+Nothing is published to a registry. This is a self-hosted console, `private:
+true`, and there is nowhere to publish it to. What a release gives you is a tag
+to check out and notes saying what changed before you upgrade an instance
+holding your fleet's data.
+
+Versions start at 1.0.0. The `3.1.0` this repository carried until then was
+inherited verbatim from the Vercel AI Chatbot template it was forked from,
+where it still is — it was never a version of this product, was never
+released, and appeared nowhere an operator could see it.
+
 ## Development
 
 ```bash

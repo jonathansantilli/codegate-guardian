@@ -1,0 +1,71 @@
+name: Release
+
+# Tags a version, writes the changelog and cuts a GitHub release. It does not
+# publish a package: this repository is private: true and there is no registry
+# to publish a self-hosted console to. What a release means here is a tag
+# somebody can check out and notes telling them what changed before they
+# upgrade an instance holding their fleet's data.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: tag and release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # semantic-release reads the whole history to work out what changed
+          # since the last tag.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10.32.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A release is a claim that this commit is fit to deploy, so it is
+      # checked here rather than trusted from another workflow. Integration and
+      # end-to-end suites need Postgres and a browser and already gate this
+      # commit in CI; these are the ones worth repeating at the moment of
+      # cutting a version.
+      - name: Lint
+        run: pnpm check
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Build
+        run: pnpm build
+
+      - name: Semantic release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release

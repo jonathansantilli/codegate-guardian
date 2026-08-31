@@ -1,0 +1,44 @@
+name: Semantic PR Title
+
+# Releases are derived from commit subjects, and pull requests here are
+# squashed — so the PR title becomes the commit message and therefore decides
+# whether a version is cut at all. A title that does not parse is a change that
+# silently never ships.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: semantic-pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: validate title
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            refactor
+            perf
+            test
+            build
+            ci
+            style
+            chore
+            revert
