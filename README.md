@@ -146,6 +146,44 @@ Two things that changed meaning:
   is an operator action: **Restore enrolment** on its page, which retires the
   withdrawn credential so the machine enrols afresh.
 
+## What a machine sends, and what it does not
+
+A check-in carries an inventory — for each artifact, which tool it belongs to,
+its kind and scope, where it lives, the risk surface it represents, and a
+sha256 of its bytes — along with the findings the agent's scan produced: rule,
+severity, category, which layer raised it, the file, and the specific lines
+that matched.
+
+**The files themselves stay on the machine.** Guardian identifies an artifact
+by its hash, which is how it can tell two files apart without ever holding
+either one.
+
+### Collecting artifact content
+
+That default can be changed, deliberately, by an operator. `PUT
+/api/fleet/collection-policy` turns on content collection; it is **off until
+somebody turns it on**, and turning it on is recorded in Activity with the
+operator's name against it.
+
+With it on, agents read the policy from `GET /api/agent/policy` before a
+check-in and offer the bytes of the artifacts it permits. Two rules bound what
+that can ever mean:
+
+- **Only prose surfaces.** An artifact qualifies only if *every* risk surface
+  it declares is in `prompt_injection`, `unicode_backdoor`, `command_exec` —
+  the surfaces that sit on skills, rules and instruction files. Anything
+  declaring `mcp_config`, `env_override`, `ide_settings` or any other surface
+  is refused, because those sit on configuration and configuration is where API
+  keys live. The list is an allowlist, so a surface added to the agent's
+  knowledge base later is refused until somebody widens it on purpose.
+- **Both sides enforce it.** The agent applies the policy before sending, and
+  this server applies every rule again to what actually arrived — including
+  re-hashing the bytes, because storage is keyed by hash and content filed
+  under a hash it does not have would corrupt every identity claim built on it.
+  A modified agent offering a settings file gets it refused here.
+
+Content is stored once per hash for the whole fleet, not once per machine.
+
 ## What it talks to
 
 Postgres, and nothing else. There is no hosted database, no analytics, no
@@ -172,6 +210,9 @@ Everything else has a working default; see `.env.example` for the full list.
 | `POSTGRES_URL` | Any standard-wire-protocol Postgres. |
 | `APP_URL` | The absolute URL this instance is served from. |
 | `NEXT_PUBLIC_SITE_URL` | Optional. The product's own site, a separate deployment. Set it and the sign-in screen shows a "Back" link; unset, it shows none. |
+| `NEXT_PUBLIC_BASE_PATH` | Optional. Path prefix when the console is served under a sub-path rather than at a domain root. |
+| `POSTGRES_DB` | Optional. Database name for the compose stack. Defaults to `postgres`. |
+| `POSTGRES_CONTAINER` | Optional. Overrides how `pnpm fresh` finds the local Postgres container. |
 
 ## Access
 

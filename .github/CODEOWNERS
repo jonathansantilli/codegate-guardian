@@ -1,0 +1,22 @@
+# Every change needs a maintainer's review. One operator, one maintainer, for
+# now — this file exists so that stays true as that changes, rather than being
+# remembered.
+*                                   @jonathansantilli
+
+# The paths where a mistake is a security bug rather than a defect, listed
+# separately so they are never quietly folded into a large diff:
+#
+#   what a machine is allowed to send, and what this server accepts
+/lib/security/                      @jonathansantilli
+/app/api/agent/                     @jonathansantilli
+/app/(fleet)/api/fleet/collection-policy/ @jonathansantilli
+/src/application/ports/fleet/agent-report-payload.ts @jonathansantilli
+#   who gets in, and how
+/app/(auth)/                        @jonathansantilli
+/proxy.ts                           @jonathansantilli
+#   what is stored, and how it is deployed
+/src/infrastructure/persistence/    @jonathansantilli
+/lib/db/migrations/                 @jonathansantilli
+/docker/                            @jonathansantilli
+/docker-compose.yml                 @jonathansantilli
+/.github/workflows/                 @jonathansantilli
