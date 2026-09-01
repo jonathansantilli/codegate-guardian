@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.1...v1.0.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **fleet:** describe a finding from its latest report, not its first ([9162f99](https://github.com/jonathansantilli/codegate-guardian/commit/9162f99355454e795c06f0191244776b97be47a8))
+
 ## [1.0.1](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.0...v1.0.1) (2026-08-31)
 
 # 1.0.0 (2026-08-31)
