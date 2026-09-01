@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.2...v1.0.3) (2026-09-01)
+
+
+### Bug Fixes
+
+* **fleet:** accept artifact content by format, not by risk surface alone ([9d32508](https://github.com/jonathansantilli/codegate-guardian/commit/9d3250868782c4a2e25310f9016c84fe8eb2a79b))
+
 ## [1.0.2](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.1...v1.0.2) (2026-09-01)
 
 
