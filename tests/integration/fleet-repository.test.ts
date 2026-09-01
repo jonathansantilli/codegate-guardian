@@ -407,6 +407,84 @@ describe("Feature: finding lifecycle (Drizzle-Postgres)", () => {
     ...overrides,
   });
 
+  /**
+   * An agent that learns to tie a finding to its artifact starts sending a
+   * contentHash where it previously sent none. Taking the first row seen kept
+   * the older null forever, so the console could not join the finding to its
+   * artifact and listed a file carrying a HIGH finding as "Clean".
+   */
+  it("Given a finding is reported again with a content hash, when listing, then the newer hash is used", async () => {
+    const hash = `sha256:${"c".repeat(64)}`;
+    const earlier = new Date("2026-08-20T12:00:00Z");
+    const later = new Date("2026-08-21T12:00:00Z");
+
+    await repository.recordReport(
+      report({
+        collectedAt: earlier,
+        receivedAt: earlier,
+        findings: [finding({ contentHash: null })],
+      })
+    );
+    await repository.recordReport(
+      report({
+        collectedAt: later,
+        receivedAt: later,
+        findings: [finding({ contentHash: hash })],
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.contentHash, hash);
+  });
+
+  it("Given a finding is reported again from a moved file, when listing, then the newer path is used", async () => {
+    const earlier = new Date("2026-08-20T12:00:00Z");
+    const later = new Date("2026-08-21T12:00:00Z");
+
+    await repository.recordReport(
+      report({
+        collectedAt: earlier,
+        receivedAt: earlier,
+        findings: [finding({ filePath: "/old/place/SKILL.md" })],
+      })
+    );
+    await repository.recordReport(
+      report({
+        collectedAt: later,
+        receivedAt: later,
+        findings: [finding({ filePath: "/new/place/SKILL.md" })],
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.filePath, "/new/place/SKILL.md");
+  });
+
+  // The other direction: a report arriving out of order must not undo it.
+  it("Given an older report arrives last, when listing, then the newer description stands", async () => {
+    const earlier = new Date("2026-08-20T12:00:00Z");
+    const later = new Date("2026-08-21T12:00:00Z");
+    const hash = `sha256:${"d".repeat(64)}`;
+
+    await repository.recordReport(
+      report({
+        collectedAt: later,
+        receivedAt: later,
+        findings: [finding({ contentHash: hash })],
+      })
+    );
+    await repository.recordReport(
+      report({
+        collectedAt: earlier,
+        receivedAt: earlier,
+        findings: [finding({ contentHash: null })],
+      })
+    );
+
+    const [found] = await repository.listFindings();
+    assert.equal(found.contentHash, hash);
+  });
+
   it("Given a machine reports a finding, when listing, then it is open", async () => {
     await repository.recordReport(report({ findings: [finding()] }));
 

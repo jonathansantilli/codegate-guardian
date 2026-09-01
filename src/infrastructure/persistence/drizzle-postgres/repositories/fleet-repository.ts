@@ -1431,6 +1431,29 @@ export class DrizzleFleetRepository implements FleetRepository {
         entry.finding.lastSeenAt = row.collectedAt;
       }
 
+      // What a finding looks like comes from the most recent report carrying
+      // it, not from whichever row this loop happened to see first.
+      //
+      // These fields do change between reports. An agent that gains the
+      // ability to tie a finding to its artifact starts sending a contentHash
+      // where it previously sent none, and a file can move. Keeping the first
+      // value meant the console went on showing the older one indefinitely:
+      // an artifact whose finding had since gained a hash stayed listed as
+      // "Clean", because nothing could join the two together.
+      //
+      // lastSeenAt has just been advanced above, so >= selects exactly the
+      // newest row. The rest of the product already treats the latest report
+      // as the truth; this is that rule applied to how a finding is described.
+      if (row.collectedAt >= entry.finding.lastSeenAt) {
+        entry.finding.contentHash = row.contentHash;
+        entry.finding.filePath = row.filePath;
+        entry.finding.severity = row.severity;
+        entry.finding.description = row.description;
+        entry.finding.evidence = row.evidence;
+        entry.finding.line = row.line;
+        entry.finding.column = row.column;
+      }
+
       const ack = ackByKey.get(`${row.hostId}::${row.fingerprint}`);
       if (ack) {
         entry.finding.acknowledgedBy = ack.acknowledgedBy;
