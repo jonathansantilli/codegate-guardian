@@ -89,6 +89,7 @@ export type RecordInventoryItemInput = {
   contentHash: string | null;
   riskSurface: unknown;
   resolvedAgainst: string | null;
+  format: string | null;
 };
 
 export type RecordedReport = {

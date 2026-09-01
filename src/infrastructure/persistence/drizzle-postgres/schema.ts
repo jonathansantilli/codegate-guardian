@@ -164,6 +164,8 @@ export const hostInventoryItem = pgTable(
     pattern: text("pattern"),
     path: text("path").notNull(),
     exists: boolean("exists").notNull(),
+    /** markdown/text are prose; jsonc/json/toml/dotenv hold configuration. */
+    format: text("format"),
     contentHash: text("contentHash"),
     riskSurface: jsonb("riskSurface").notNull(),
     resolvedAgainst: text("resolvedAgainst"),

@@ -1,48 +1,74 @@
 /**
  * Which artifacts may ever have their bytes sent to this server.
  *
- * The agent's knowledge base tags every artifact it knows about with the risk
- * surfaces it represents. That tagging is what makes an upload rule
- * enforceable rather than aspirational: "skills and rules files, not configs"
- * is a sentence, but "every declared surface must be in this list" is a check.
+ * Two questions, asked in that order. How is the file written — is it prose a
+ * person wrote for a model to read, or is it configuration? And does anything
+ * the agent's knowledge base says about it mean it holds a credential?
  *
- * Allowlisted, not denylisted, and deliberately. A surface added to the
- * knowledge base later — for a tool nobody has written support for yet — is
- * refused here until somebody widens this list on purpose. The failure mode of
- * a denylist is that new things are uploaded because nobody remembered to
- * exclude them, and on this particular path that means shipping a developer's
- * credentials to a server.
+ * Format is the load-bearing one. "Skills and rules files, not configs" is a
+ * sentence; "the file must be markdown or text" is a check, and it is the check
+ * that matches what the sentence meant. Deciding on declared risk surfaces
+ * alone got it wrong in both directions, and both directions mattered: it
+ * refused the artifact this product exists to look at hardest, and it admitted
+ * files that can hold an API key.
  *
- * The three below are prose surfaces: instructions, hidden characters in
- * instructions, and shell commands embedded in instructions. They describe
- * markdown a model can usefully read. Everything else the knowledge base
- * declares — mcp_config, env_override, ide_settings, provider_credentials,
- * secret_leak, channel_token and the rest — sits on files whose whole purpose
- * is to hold configuration, which is where API keys live.
- *
- * NOTE: `codegate`'s own copy of this list is the one that actually protects a
- * developer, because it runs on their machine and this server does not. This
+ * NOTE: `codegate`'s own copy of these rules is the one that actually protects
+ * a developer, because it runs on their machine and this server does not. This
  * copy stops a mis-set policy turning the console into a place credentials are
  * kept. Both sides enforce it; neither trusts the other to have done so.
  */
-export const UPLOADABLE_RISK_SURFACES: readonly string[] = [
-  "prompt_injection",
-  "unicode_backdoor",
-  "command_exec",
-];
 
 /**
- * True when every surface the artifact declares is uploadable.
+ * Formats whose files are prose.
  *
- * An artifact with no declared surface is refused rather than allowed: an
- * empty list means the knowledge base said nothing about it, which is not the
- * same as saying it is safe.
+ * This is the question that actually matters for an upload: not what the file
+ * is *about*, but how it is written. Markdown and text hold instructions a
+ * person wrote for a model to read. jsonc, json, toml, yaml and dotenv hold
+ * configuration, and configuration is where credentials live — a .toml command
+ * definition can carry an API key in an env block exactly as settings.json
+ * does, whether or not anybody thought to tag it that way.
+ *
+ * Deciding on risk_surface alone got this wrong in both directions: it refused
+ * a Claude Code SKILL.md because the entry declares mcp_config — which
+ * means the skill can influence MCP configuration, not that the markdown holds
+ * a key — and it admitted .cline/workflows.json and the Gemini command .toml files
+ * because those happen to declare nothing credential-shaped.
  */
-export function isUploadableSurface(riskSurface: readonly string[]): boolean {
-  if (riskSurface.length === 0) {
-    return false;
-  }
-  return riskSurface.every((surface) =>
-    UPLOADABLE_RISK_SURFACES.includes(surface)
+export const UPLOADABLE_FORMATS: readonly string[] = ["markdown", "text"];
+
+/**
+ * True when the artifact is written as prose.
+ *
+ * An artifact with no format is refused. Absent means the agent predates the
+ * field or its knowledge base does not describe the file, and neither is
+ * evidence that the file is safe to send.
+ */
+export function isUploadableFormat(format: string | null | undefined): boolean {
+  return typeof format === "string" && UPLOADABLE_FORMATS.includes(format);
+}
+
+/**
+ * Surfaces that mean the file holds credentials, whatever its format says.
+ *
+ * The ceiling the operator cannot raise. Requiring every declared surface to
+ * sit in a three-name allowlist refused a Claude Code SKILL.md, which
+ * declares mcp_config because a skill can influence MCP configuration — not
+ * because the markdown holds a key. Which risks an operator collects content
+ * for is their choice; what is never collected is a file holding a secret,
+ * and format decides most of that with these as the backstop.
+ */
+export const CREDENTIAL_SURFACES: readonly string[] = [
+  "env_override",
+  "provider_credentials",
+  "secret_leak",
+  "channel_token",
+  "ide_settings",
+];
+
+/** True when no surface the artifact declares means it holds a credential. */
+export function isCredentialFree(riskSurface: readonly string[]): boolean {
+  return (
+    riskSurface.length > 0 &&
+    !riskSurface.some((s) => CREDENTIAL_SURFACES.includes(s))
   );
 }

@@ -41,6 +41,7 @@ function report(
         contentHash:
           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         riskSurface: ["prompt-injection"],
+        format: "markdown",
         resolvedAgainst: "/Users/jsantilli",
       },
       {
@@ -53,6 +54,7 @@ function report(
         exists: true,
         contentHash: null,
         riskSurface: [],
+        format: "markdown",
         resolvedAgainst: "/repo",
       },
     ],
@@ -148,6 +150,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
             exists: true,
             contentHash: null,
             riskSurface: [],
+            format: "markdown",
             resolvedAgainst: "/repo",
           },
         ],
@@ -175,6 +178,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
             exists: false,
             contentHash: null,
             riskSurface: [],
+            format: "markdown",
             resolvedAgainst: "/Users/jsantilli",
           },
         ],
@@ -234,6 +238,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: null,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: "/Users/jsantilli",
     }));
 
@@ -256,6 +261,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: "/Users/x",
     });
     const bad = `sha256:${"b".repeat(64)}`;
@@ -294,6 +300,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: "/Users/x",
     };
 
@@ -329,6 +336,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
             exists: true,
             contentHash: null,
             riskSurface: [],
+            format: "markdown",
             resolvedAgainst: "/Users/x",
           },
         ],
@@ -348,6 +356,7 @@ describe("Feature: FleetRepository (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: "/Users/x",
     });
 
@@ -1273,6 +1282,7 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: null,
     });
 
@@ -1310,6 +1320,7 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: null,
     });
 
@@ -1479,6 +1490,7 @@ describe("Feature: fleet aggregates (Drizzle-Postgres)", () => {
       exists: true,
       contentHash: hash,
       riskSurface: [],
+      format: "markdown",
       resolvedAgainst: null,
     });
 

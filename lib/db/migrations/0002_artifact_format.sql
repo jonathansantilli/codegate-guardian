@@ -1,0 +1,1 @@
+ALTER TABLE "HostInventoryItem_v1" ADD COLUMN "format" text;

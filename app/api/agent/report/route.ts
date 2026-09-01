@@ -79,6 +79,7 @@ function toItemInput(item: InventoryItemPayload): RecordInventoryItemInput {
     pattern: item.pattern ?? null,
     path: item.path,
     exists: item.exists,
+    format: item.format ?? null,
     contentHash: item.sha256 ?? null,
     riskSurface: item.risk_surface,
     resolvedAgainst: item.resolved_against ?? null,
@@ -264,6 +265,7 @@ export async function POST(request: Request) {
         payload.inventory.items.map((item) => ({
           sha256: item.sha256,
           riskSurface: item.risk_surface,
+          format: item.format ?? null,
         })),
         policy
       );

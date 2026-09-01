@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { GuardianError } from "@/lib/errors";
-import { UPLOADABLE_RISK_SURFACES } from "@/lib/security/collection-surfaces";
+import { CREDENTIAL_SURFACES } from "@/lib/security/collection-surfaces";
 import { getContainer } from "@/src/infrastructure";
 
 /**
@@ -24,8 +24,16 @@ const updateSchema = z.object({
    * saving a narrower policy than they typed would hide that from them.
    */
   allowedRiskSurfaces: z
-    .array(z.enum(UPLOADABLE_RISK_SURFACES as [string, ...string[]]))
-    .max(UPLOADABLE_RISK_SURFACES.length),
+    .array(z.string().max(64))
+    .max(64)
+    .refine(
+      (surfaces) => !surfaces.some((s) => CREDENTIAL_SURFACES.includes(s)),
+      {
+        message:
+          "Surfaces that mean a file holds credentials cannot be collected: " +
+          CREDENTIAL_SURFACES.join(", "),
+      }
+    ),
   maxBytesPerArtifact: z.number().int().positive().max(MAX_BYTES_CEILING),
   maxArtifactsPerReport: z.number().int().positive().max(MAX_ARTIFACTS_CEILING),
 });
@@ -38,7 +46,10 @@ export async function GET() {
 
   const policy = await getContainer().ports.fleet.getCollectionPolicy();
   return Response.json(
-    { policy, uploadableRiskSurfaces: UPLOADABLE_RISK_SURFACES },
+    // What an operator may not pick, rather than a short list of what they may:
+    // format decides whether a file can hold a secret, and these are the
+    // surfaces that mean it does regardless of format.
+    { policy, credentialSurfaces: CREDENTIAL_SURFACES },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }

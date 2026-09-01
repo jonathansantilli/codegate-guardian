@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { isUploadableSurface } from "./collection-surfaces";
+import { isCredentialFree, isUploadableFormat } from "./collection-surfaces";
 
 /**
  * Decides which offered artifacts this server is willing to keep.
@@ -18,7 +18,12 @@ import { isUploadableSurface } from "./collection-surfaces";
 export type OfferedContent = { sha256: string; content: string };
 
 /** The inventory rows in the same report, which say what each hash IS. */
-export type ReportedArtifact = { sha256?: string; riskSurface: string[] };
+export type ReportedArtifact = {
+  sha256?: string;
+  riskSurface: string[];
+  /** How the file is written. Absent from agents predating the field. */
+  format?: string | null;
+};
 
 export type ContentPolicy = {
   collectContent: boolean;
@@ -43,6 +48,8 @@ export const CONTENT_REFUSAL = {
   HashMismatch: "hash_mismatch",
   /** A surface this build never accepts, or one the policy excludes. */
   SurfaceNotAllowed: "surface_not_allowed",
+  /** Not a prose file — or an agent too old to say what it is. */
+  FormatNotAllowed: "format_not_allowed",
   /** Larger than the policy permits. */
   TooLarge: "too_large",
   /** Beyond the per-report count. */
@@ -85,6 +92,10 @@ export function acceptArtifactContent(
   // so the surfaces are unioned: an artifact is as sensitive as the most
   // sensitive thing any row says it is.
   const surfacesByHash = new Map<string, Set<string>>();
+  // A hash can appear on more than one row; if any row calls it something
+  // other than prose, that is the answer. The same file described two ways is
+  // as sensitive as the more sensitive description.
+  const formatsByHash = new Map<string, Set<string | null>>();
   for (const item of reported) {
     if (!item.sha256) {
       continue;
@@ -94,6 +105,10 @@ export function acceptArtifactContent(
       existing.add(surface);
     }
     surfacesByHash.set(item.sha256, existing);
+
+    const formats = formatsByHash.get(item.sha256) ?? new Set<string | null>();
+    formats.add(item.format ?? null);
+    formatsByHash.set(item.sha256, formats);
   }
 
   const accepted: AcceptedContent[] = [];
@@ -136,8 +151,20 @@ export function acceptArtifactContent(
       continue;
     }
 
+    // How the file is written decides this, not what it is about. A skill
+    // that can influence MCP configuration is still markdown; a .toml command
+    // definition is still configuration, and configuration holds credentials.
+    const formats = [...(formatsByHash.get(item.sha256) ?? new Set())];
+    if (formats.length === 0 || !formats.every((f) => isUploadableFormat(f))) {
+      refused.push({
+        contentHash: item.sha256,
+        reason: CONTENT_REFUSAL.FormatNotAllowed,
+      });
+      continue;
+    }
+
     const riskSurface = [...surfaces].sort();
-    const withinBuild = isUploadableSurface(riskSurface);
+    const withinBuild = isCredentialFree(riskSurface);
     const withinPolicy = riskSurface.every((surface) =>
       policy.allowedRiskSurfaces.includes(surface)
     );

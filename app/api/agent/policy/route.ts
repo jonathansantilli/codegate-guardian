@@ -1,5 +1,5 @@
 import { extractBearerToken } from "@/lib/security/agent-token";
-import { UPLOADABLE_RISK_SURFACES } from "@/lib/security/collection-surfaces";
+import { CREDENTIAL_SURFACES } from "@/lib/security/collection-surfaces";
 import { hashMachineToken } from "@/lib/security/machine-token";
 import { getContainer } from "@/src/infrastructure";
 
@@ -57,8 +57,8 @@ export async function GET(request: Request) {
   // The stored policy is an operator's intent; this list is the product's
   // limit. Publishing the intersection means an operator cannot advertise a
   // surface the server would refuse to store anyway.
-  const allowed = policy.allowedRiskSurfaces.filter((surface) =>
-    UPLOADABLE_RISK_SURFACES.includes(surface)
+  const allowed = policy.allowedRiskSurfaces.filter(
+    (surface) => !CREDENTIAL_SURFACES.includes(surface)
   );
 
   return Response.json(

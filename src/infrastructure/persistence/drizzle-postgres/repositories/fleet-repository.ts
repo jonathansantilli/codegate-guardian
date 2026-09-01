@@ -341,6 +341,7 @@ export class DrizzleFleetRepository implements FleetRepository {
             pattern: item.pattern,
             path: item.path,
             exists: item.exists,
+            format: item.format,
             contentHash: item.contentHash,
             riskSurface: item.riskSurface ?? [],
             resolvedAgainst: item.resolvedAgainst,

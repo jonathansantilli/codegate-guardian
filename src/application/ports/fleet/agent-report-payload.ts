@@ -37,6 +37,12 @@ export const inventoryItemSchema = z.object({
   // predates hashing — the server keeps such rows but cannot group them.
   sha256: z.string().regex(CONTENT_HASH).optional(),
   risk_surface: z.array(boundedString).max(MAX_RISK_SURFACES).default([]),
+  /**
+   * How the file is written, as the agent's knowledge base describes it.
+   * Optional because agents predating it send nothing, and its absence has to
+   * read as "unknown" — which the upload check treats as "refuse".
+   */
+  format: boundedString.optional(),
   fields_of_interest: z.record(boundedString, boundedString).optional(),
   resolved_against: boundedString.optional(),
 });

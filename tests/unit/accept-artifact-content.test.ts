@@ -21,8 +21,12 @@ const OPEN: ContentPolicy = {
 const RULES_FILE = "# Rules\n\nAlways run the tests.\n";
 const RULES_HASH = hash(RULES_FILE);
 
-function inventory(riskSurface: string[], sha256 = RULES_HASH) {
-  return [{ sha256, riskSurface }];
+function inventory(
+  riskSurface: string[],
+  sha256 = RULES_HASH,
+  format = "markdown"
+) {
+  return [{ sha256, riskSurface, format }];
 }
 
 describe("Feature: what a server accepts when an agent offers file contents", () => {
@@ -57,14 +61,16 @@ describe("Feature: what a server accepts when an agent offers file contents", ()
     ]);
   });
 
-  // The whole point of the allowlist: mcp_config is where API keys live.
+  // env_override means the file holds a key. mcp_config does not: it means
+  // the file can influence MCP configuration, which is worth reading, not
+  // a credential sitting in the markdown.
   test("Given an artifact carrying a credential-bearing surface, when it is offered, then it is refused", () => {
     const result = acceptArtifactContent(
       [{ sha256: RULES_HASH, content: RULES_FILE }],
-      inventory(["prompt_injection", "mcp_config"]),
+      inventory(["prompt_injection", "env_override"]),
       {
         ...OPEN,
-        allowedRiskSurfaces: [...OPEN.allowedRiskSurfaces, "mcp_config"],
+        allowedRiskSurfaces: [...OPEN.allowedRiskSurfaces, "env_override"],
       }
     );
 
@@ -140,6 +146,7 @@ describe("Feature: what a server accepts when an agent offers file contents", ()
     const reported = offered.map((item) => ({
       sha256: item.sha256,
       riskSurface: ["prompt_injection"],
+      format: "markdown",
     }));
 
     const result = acceptArtifactContent(offered, reported, {
@@ -171,8 +178,12 @@ describe("Feature: what a server accepts when an agent offers file contents", ()
     const result = acceptArtifactContent(
       [{ sha256: RULES_HASH, content: RULES_FILE }],
       [
-        { sha256: RULES_HASH, riskSurface: ["prompt_injection"] },
-        { sha256: RULES_HASH, riskSurface: ["mcp_config"] },
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["prompt_injection"],
+          format: "markdown",
+        },
+        { sha256: RULES_HASH, riskSurface: ["mcp_config"], format: "markdown" },
       ],
       OPEN
     );
@@ -193,5 +204,111 @@ describe("Feature: what a server accepts when an agent offers file contents", ()
 
     assert.equal(result.accepted.length, 1);
     assert.equal(result.refused.length, 0);
+  });
+});
+
+/**
+ * The rule used to be "every declared risk surface is permitted", which asked
+ * the wrong question. risk_surface says which detectors apply to a file, not
+ * whether the file can hold a secret, and the two diverge in both directions.
+ */
+describe("Feature: how a file is written decides whether its contents may be sent", () => {
+  test("Given a Claude Code skill, when it declares mcp_config, then it is still markdown and is accepted", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["prompt_injection", "command_exec"],
+          format: "markdown",
+        },
+      ],
+      OPEN
+    );
+
+    assert.equal(result.refused.length, 0);
+    assert.equal(result.accepted.length, 1);
+  });
+
+  test("Given a toml command definition, when its surfaces look harmless, then it is refused as configuration", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["command_exec", "prompt_injection"],
+          format: "toml",
+        },
+      ],
+      OPEN
+    );
+
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.refused[0]?.reason, CONTENT_REFUSAL.FormatNotAllowed);
+  });
+
+  test("Given a jsonc workflow file, when offered, then it is refused", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["prompt_injection"],
+          format: "jsonc",
+        },
+      ],
+      OPEN
+    );
+
+    assert.equal(result.refused[0]?.reason, CONTENT_REFUSAL.FormatNotAllowed);
+  });
+
+  // An agent predating the field says nothing, and silence is not consent.
+  test("Given an agent that reports no format, when content is offered, then it is refused", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [{ sha256: RULES_HASH, riskSurface: ["prompt_injection"] }],
+      OPEN
+    );
+
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.refused[0]?.reason, CONTENT_REFUSAL.FormatNotAllowed);
+  });
+
+  test("Given one hash described as prose on one row and configuration on another, then it is refused", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["prompt_injection"],
+          format: "markdown",
+        },
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["prompt_injection"],
+          format: "json",
+        },
+      ],
+      OPEN
+    );
+
+    assert.equal(result.refused[0]?.reason, CONTENT_REFUSAL.FormatNotAllowed);
+  });
+
+  test("Given prose carrying a credential-bearing surface, then the surface check still refuses it", () => {
+    const result = acceptArtifactContent(
+      [{ sha256: RULES_HASH, content: RULES_FILE }],
+      [
+        {
+          sha256: RULES_HASH,
+          riskSurface: ["env_override"],
+          format: "markdown",
+        },
+      ],
+      OPEN
+    );
+
+    assert.equal(result.refused[0]?.reason, CONTENT_REFUSAL.SurfaceNotAllowed);
   });
 });
