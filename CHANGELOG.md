@@ -1,3 +1,11 @@
+## [1.0.4](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.3...v1.0.4) (2026-09-02)
+
+
+### Bug Fixes
+
+* **auth:** hand APP_URL to Auth.js without validating the environment at import ([fa357ad](https://github.com/jonathansantilli/codegate-guardian/commit/fa357adce80d622abb0edef5c93f04052d28d49f))
+* make the published image deployable, and stop it lying about itself ([2db2c4a](https://github.com/jonathansantilli/codegate-guardian/commit/2db2c4aaedb0a8dcf141e2683f790236324d07ad))
+
 ## [1.0.3](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.2...v1.0.3) (2026-09-01)
 
 
