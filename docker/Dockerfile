@@ -39,10 +39,6 @@ COPY . .
 # values never reach the runtime image.
 ENV AUTH_SECRET=build-time-placeholder-not-a-real-secret
 ENV POSTGRES_URL=postgresql://build:build@127.0.0.1:5432/build
-# Inlined into the sign-in screen at build time, so it has to be present now
-# rather than at runtime. Not a secret: it is a public address.
-ARG NEXT_PUBLIC_SITE_URL=""
-ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 RUN pnpm build
 
 # --------------------------------------------------------------------------

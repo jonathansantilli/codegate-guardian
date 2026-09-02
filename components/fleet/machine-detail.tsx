@@ -88,7 +88,6 @@ export type HostDetail = {
 };
 
 /** The agent reports on this cadence; the server never asks it to. */
-const REPORT_INTERVAL_HOURS = 6;
 
 export function useHostDetail(hostId: string) {
   return useSWR<HostDetail>(`${API_BASE}/host?hostId=${hostId}`, fetcher, {
@@ -450,22 +449,6 @@ export function MachineInventory({ hostId }: { hostId: string }) {
                 </span>
               </div>
               <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <span className="dot" style={{ background: "var(--fg3)" }} />
-                <span style={{ fontSize: "13px" }}>Next expected</span>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--fg3)",
-                    marginLeft: "auto",
-                  }}
-                >
-                  in ~{REPORT_INTERVAL_HOURS} hours
-                </span>
-              </div>
-              <div
                 style={{
                   display: "flex",
                   alignItems: "flex-start",
@@ -480,7 +463,8 @@ export function MachineInventory({ hostId }: { hostId: string }) {
               >
                 <Ic name="clock" size={14} />
                 <span>
-                  The agent reports on its own schedule. Nothing is sent to it
+                  The agent reports when `codegate report` runs on the machine —
+                  on whatever schedule its owner gives it. Nothing is sent to it
                   from here.
                 </span>
               </div>

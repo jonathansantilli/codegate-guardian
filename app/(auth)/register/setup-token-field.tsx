@@ -1,18 +1,14 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { hasAnyUser } from "@/lib/db/queries";
 
 /**
  * Asks for the token that claims an unclaimed instance.
  *
- * Renders nothing once the console has an operator: the token no longer opens
- * anything, and showing a dead field invites guessing at it.
+ * Only ever rendered by RegisterGate, on an instance nobody has claimed: once
+ * there is an operator the token opens nothing, and a dead field invites
+ * guessing at it.
  */
-export async function SetupTokenField() {
-  if (await hasAnyUser()) {
-    return null;
-  }
-
+export function SetupTokenField() {
   return (
     <div className="flex flex-col gap-2">
       <Label className="font-normal text-muted-foreground" htmlFor="setupToken">

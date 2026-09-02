@@ -39,8 +39,14 @@ const envSchema = z.object({
 
   // Optional core
 
-  // Absolute base URL this instance is reached at. Used for page metadata.
+  // Absolute base URL this instance is reached at. Used for page metadata and
+  // handed to Auth.js as AUTH_URL, so redirects point at the address people
+  // use rather than the one the container is bound to.
   APP_URL: stringWithDefault("http://localhost:3000"),
+
+  // The site that describes this product — a separate deployment. When set,
+  // the sign-in screen offers a Back link to it. Runtime, not build time.
+  SITE_URL: optionalNonEmpty,
 
   // Demo / basePath behavior
   IS_DEMO: booleanFromString.default(false),

@@ -31,7 +31,7 @@ export function RegisterForm({
       toast({
         type: "error",
         description:
-          "This console already has an operator. Ask them to create your account.",
+          "This console already has an operator, and this version has exactly one. Sign in instead.",
       });
     } else if (state.status === "setup_token_missing") {
       toast({
@@ -51,6 +51,9 @@ export function RegisterForm({
         description: "Failed validating your submission!",
       });
     } else if (state.status === "success") {
+      // Rarely reached: on success the action redirects to /fleet itself, and
+      // this form is unmounted by the re-render. Kept for the case where the
+      // redirect is not followed.
       toast({ type: "success", description: "Account created!" });
       setIsSuccessful(true);
       updateSession();
@@ -72,6 +75,7 @@ export function RegisterForm({
       <AuthForm
         action={handleSubmit}
         defaultEmail={email}
+        passwordAutoComplete="new-password"
         setupTokenField={setupTokenField}
       >
         <SubmitButton isSuccessful={isSuccessful}>Sign up</SubmitButton>

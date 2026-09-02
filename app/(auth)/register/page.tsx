@@ -1,22 +1,16 @@
 import { Suspense } from "react";
-import { RegisterForm } from "./register-form";
-import { SetupTokenField } from "./setup-token-field";
+import { RegisterGate } from "./register-gate";
 
 /**
- * The form is the same either way; only whether it asks for a setup token
- * depends on a server read, so that is the only part behind a boundary.
- *
- * Wrapping the whole page instead put the form in the document twice — one
- * copy from the static shell, one from hydration, sharing input ids.
+ * Whether this screen is a claim form or a "already claimed" notice depends
+ * on a server read, so the whole screen sits behind one boundary. The fallback
+ * is empty on purpose: a fallback that drew the form put two copies in the
+ * document — one from the static shell, one from hydration — sharing ids.
  */
 export default function Page() {
   return (
-    <RegisterForm
-      setupTokenField={
-        <Suspense fallback={null}>
-          <SetupTokenField />
-        </Suspense>
-      }
-    />
+    <Suspense fallback={null}>
+      <RegisterGate />
+    </Suspense>
   );
 }

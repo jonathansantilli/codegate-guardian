@@ -386,8 +386,9 @@ export function ArtifactDetailScreen({ contentHash }: { contentHash: string }) {
             }}
           >
             Machines are compared by content hash, not by file contents — the
-            agent reports the hash and never uploads the file, so two variants
-            are known to differ without either being stored here.
+            agent reports the hash, and sends the file itself only when this
+            server's collection policy asks for it, so two variants are known to
+            differ without either needing to be stored here.
           </div>
         </Card>
       </div>

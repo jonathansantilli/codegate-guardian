@@ -25,7 +25,11 @@ export function formatRelativeTime(
   value: Date,
   now: Date = new Date()
 ): string {
-  const seconds = Math.round((now.getTime() - value.getTime()) / 1000);
+  const elapsed = Math.round((now.getTime() - value.getTime()) / 1000);
+  // An enrolment code expiring tomorrow read "expires just now": the
+  // function only knew about the past. Both directions, same units.
+  const ahead = elapsed < 0;
+  const seconds = Math.abs(elapsed);
 
   if (seconds < 60) {
     return "just now";
@@ -39,7 +43,8 @@ export function formatRelativeTime(
 
   for (const [label, unitSeconds] of units) {
     if (seconds >= unitSeconds) {
-      return `${Math.floor(seconds / unitSeconds)}${label} ago`;
+      const amount = `${Math.floor(seconds / unitSeconds)}${label}`;
+      return ahead ? `in ${amount}` : `${amount} ago`;
     }
   }
 

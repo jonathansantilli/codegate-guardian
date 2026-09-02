@@ -1,7 +1,7 @@
-import { ArrowLeftIcon } from "lucide-react";
+import { Suspense } from "react";
 import { Toaster } from "sonner";
-
 import { GuardianMark } from "@/components/guardian-mark";
+import { SiteBackLink } from "./site-back-link";
 
 /**
  * The sign-in frame.
@@ -26,16 +26,6 @@ const FACTS: { title: string; body: string }[] = [
   },
 ];
 
-/**
- * Where the product's own site lives, if it is deployed.
- *
- * The page describing CodeGate Guardian is its own deployment now, so this
- * screen can only link to it if somebody has said where it is. Unset, the
- * Back link is not rendered at all: a link that returns you to the page you
- * are already on is worse than no link.
- */
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
-
 export default function AuthLayout({
   children,
 }: {
@@ -48,20 +38,9 @@ export default function AuthLayout({
           closed all looked like the button doing nothing. */}
       <Toaster position="top-center" theme="system" />
       <div className="flex w-full flex-col bg-background p-8 xl:w-[600px] xl:shrink-0 xl:rounded-r-2xl xl:border-border/40 xl:border-r md:p-16">
-        {SITE_URL ? (
-          <a
-            className="flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-            href={SITE_URL}
-          >
-            <ArrowLeftIcon className="size-3.5" />
-            Back
-          </a>
-        ) : (
-          // Nothing to go back to. "/" is the console, which is behind this
-          // screen — a Back link pointing at it returns the visitor here,
-          // which is exactly the loop this link used to be.
-          <span />
-        )}
+        <Suspense fallback={<span />}>
+          <SiteBackLink />
+        </Suspense>
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-10">
           <div className="flex flex-col gap-2">
             <GuardianMark className="mb-2 size-8" />

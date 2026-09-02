@@ -208,8 +208,8 @@ Everything else has a working default; see `.env.example` for the full list.
 | `AGENT_INGEST_TOKEN` | **Required to accept agents.** Its presence is what opens enrolment. |
 | `SETUP_TOKEN` | **Required to claim a fresh instance.** Unset means it cannot be claimed. |
 | `POSTGRES_URL` | Any standard-wire-protocol Postgres. |
-| `APP_URL` | The absolute URL this instance is served from. |
-| `NEXT_PUBLIC_SITE_URL` | Optional. The product's own site, a separate deployment. Set it and the sign-in screen shows a "Back" link; unset, it shows none. |
+| `APP_URL` | The absolute URL this instance is served from. Also handed to Auth.js as `AUTH_URL` (unless you set that yourself), so sign-in and sign-out redirects point at this address rather than the container's bind address. |
+| `SITE_URL` | Optional. The product's own site, a separate deployment. Set it and the sign-in screen shows a "Back" link to it; unset, no link. Read at runtime, so the published image honours it. |
 | `NEXT_PUBLIC_BASE_PATH` | Optional. Path prefix when the console is served under a sub-path rather than at a domain root. |
 | `POSTGRES_DB` | Optional. Database name for the compose stack. Defaults to `postgres`. |
 | `POSTGRES_CONTAINER` | Optional. Overrides how `pnpm fresh` finds the local Postgres container. |

@@ -195,8 +195,8 @@ export function AccessScreen() {
           <b style={{ color: "var(--fg)", fontWeight: 600 }}>
             This console is a client of the API below.
           </b>{" "}
-          Anything you can do here, an agent or a script can do with a session
-          or an agent token.
+          Anything you can do here, a script can do with your session cookie.
+          Agents have two routes of their own, and their own token.
         </span>
       </div>
 
@@ -300,7 +300,7 @@ export function AccessScreen() {
             <CardHead
               action={
                 <Copyable
-                  text={`curl -H "Authorization: Bearer $CG_SESSION" \\\n    ${origin}/api/fleet/findings`}
+                  text={`curl -b "authjs.session-token=$CG_SESSION" \\\n    ${origin}/api/fleet/findings`}
                 >
                   <Ic name="copy" size={15} />
                 </Copyable>
@@ -309,9 +309,9 @@ export function AccessScreen() {
             />
             <div style={{ padding: "14px 16px" }}>
               <div className="code">
-                {"$ curl -H "}
+                {"$ curl -b "}
                 <span className="kw">
-                  {'"Authorization: Bearer $CG_TOKEN"'}
+                  {'"authjs.session-token=$CG_SESSION"'}
                 </span>
                 {" \\\n    "}
                 <span className="kw">{`${origin}/api/fleet/findings`}</span>

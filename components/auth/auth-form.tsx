@@ -7,6 +7,7 @@ export function AuthForm({
   action,
   children,
   defaultEmail = "",
+  passwordAutoComplete = "current-password",
   setupTokenField,
 }: {
   action: NonNullable<
@@ -14,6 +15,8 @@ export function AuthForm({
   >;
   children: React.ReactNode;
   defaultEmail?: string;
+  /** "new-password" on the claim form, so a password manager offers to make one. */
+  passwordAutoComplete?: "current-password" | "new-password";
   /** Rendered between the password and the submit; see app/(auth)/actions.ts. */
   setupTokenField?: React.ReactNode;
 }) {
@@ -41,6 +44,7 @@ export function AuthForm({
           Password
         </Label>
         <Input
+          autoComplete={passwordAutoComplete}
           className="h-10 rounded-lg border-border/50 bg-muted/50 text-sm transition-colors focus:border-foreground/20 focus:bg-muted"
           id="password"
           name="password"

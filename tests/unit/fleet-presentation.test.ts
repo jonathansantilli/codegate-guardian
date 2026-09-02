@@ -48,6 +48,16 @@ describe("formatRelativeTime", () => {
     assert.equal(formatRelativeTime(hoursAgo(3), NOW), "3h ago");
     assert.equal(formatRelativeTime(hoursAgo(50), NOW), "2d ago");
   });
+
+  // A code minted to expire in a day is not expiring "just now".
+  test("renders a future date as time ahead", () => {
+    assert.equal(formatRelativeTime(hoursAgo(-23), NOW), "in 23h");
+    assert.equal(formatRelativeTime(hoursAgo(-50), NOW), "in 2d");
+    assert.equal(
+      formatRelativeTime(new Date(NOW.getTime() + 5 * 60_000), NOW),
+      "in 5m"
+    );
+  });
 });
 
 describe("displayPath", () => {

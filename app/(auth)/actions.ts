@@ -1,7 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
-
 import {
   clearSignInFailures,
   createFirstUser,
@@ -13,7 +13,6 @@ import {
 } from "@/lib/db/queries";
 import { isValidSetupToken } from "@/lib/security/setup-token";
 import { getContainer } from "@/src/infrastructure";
-
 import { signIn } from "./auth";
 
 const authFormSchema = z.object({
@@ -58,6 +57,18 @@ export const login = async (
     // signIn throws on a bad credential, so reaching here means it worked.
     await clearSignInFailures(validatedData.email);
 
+    // Who signed in, and when, belongs in the same log as everything they then
+    // did. Failures stay in SignInAttempt_v1, which throttles them.
+    await getContainer().ports.fleet.recordActivity({
+      occurredAt: new Date(),
+      actorKind: "person",
+      actorName: validatedData.email,
+      action: "Signed in",
+      target: null,
+      result: "Session issued",
+      apiCall: "POST /login",
+    });
+
     return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -90,6 +101,19 @@ export const register = async (
   _: RegisterActionState,
   formData: FormData
 ): Promise<RegisterActionState> => {
+  const result = await claim(formData);
+  if (result.status === "success") {
+    // The action's response re-renders this route, and on a now-claimed
+    // instance that is the "already has an operator" notice: the form, and
+    // the effect that would have navigated, are gone before they can run. So
+    // the navigation happens here. Outside the try below on purpose - redirect
+    // works by throwing, and the catch would report it as a failure.
+    redirect("/fleet");
+  }
+  return result;
+};
+
+const claim = async (formData: FormData): Promise<RegisterActionState> => {
   try {
     const validatedData = authFormSchema.parse({
       email: formData.get("email"),
@@ -166,6 +190,17 @@ export const register = async (
     if (!claimed) {
       return { status: "closed" } as RegisterActionState;
     }
+    // The single most consequential event this console records about itself:
+    // who became its operator. Everything in the log after this is theirs.
+    await getContainer().ports.fleet.recordActivity({
+      occurredAt: new Date(),
+      actorKind: "person",
+      actorName: validatedData.email,
+      action: "Claimed the instance",
+      target: null,
+      result: "First operator",
+      apiCall: "POST /register",
+    });
     await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,

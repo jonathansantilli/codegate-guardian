@@ -92,14 +92,21 @@ jobs:
 
   # Separate from the release so a slow image build never delays the tag and
   # the notes. If this fails the version still exists and can be built again.
+  #
+  # One job per image per architecture, each on a runner of that architecture.
+  # Emulating arm64 under QEMU hung `pnpm install` for 89 minutes and timed the
+  # job out - twice - which is how v1.0.3 shipped a migrate image and no
+  # console. Native runners build in minutes. Each job pushes its layers by
+  # digest, without a tag; the manifest job below names the image once both
+  # halves exist, so a tag never points at half a release.
   publish-image:
-    name: publish container images
+    name: build ${{ matrix.image }} (${{ matrix.arch }})
     needs: release
     if: needs.release.outputs.released == 'true'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
       packages: write
     strategy:
       fail-fast: false
@@ -109,18 +116,15 @@ jobs:
           # container that applies migrations before it starts. Publishing
           # only the console would leave anyone deploying from the registry
           # still having to build half of it themselves.
-          - target: runner
-            image: codegate-guardian
-          - target: migrate
-            image: codegate-guardian-migrate
+          - { target: runner, image: codegate-guardian, arch: amd64, runner: ubuntu-24.04 }
+          - { target: runner, image: codegate-guardian, arch: arm64, runner: ubuntu-24.04-arm }
+          - { target: migrate, image: codegate-guardian-migrate, arch: amd64, runner: ubuntu-24.04 }
+          - { target: migrate, image: codegate-guardian-migrate, arch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: v${{ needs.release.outputs.version }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -132,7 +136,78 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tags and labels
+      - name: Labels
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Attached to the image in the registry, so what is deployed carries
+          # its own bill of materials and a record of where it was built.
+          sbom: true
+          provenance: mode=max
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.arch }}
+
+      - name: Record the digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+
+      - name: Hand the digest to the manifest job
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Stitches the per-architecture images into one tag per image, then writes
+  # the SBOM a person can download from the release page.
+  publish-manifest:
+    name: publish ${{ matrix.image }}
+    needs: [release, publish-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: codegate-guardian }
+          - { image: codegate-guardian-migrate }
+    steps:
+      - name: Collect the digests
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
@@ -143,25 +218,19 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
             type=raw,value=latest
 
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          target: ${{ matrix.target }}
-          # arm64 as well as amd64: people self-host this on Apple Silicon and
-          # on Graviton, and an image they cannot run is not a release.
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Attached to the image in the registry, so what is deployed carries
-          # its own bill of materials and a record of where it was built.
-          sbom: true
-          provenance: mode=max
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+      - name: Create the multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          # One "-t tag" per tag from the metadata step; one digest per file here.
+          tags=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          # shellcheck disable=SC2046,SC2086
+          docker buildx imagetools create $tags \
+            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Inspect what was published
+        run: |
+          docker buildx imagetools inspect \
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.release.outputs.version }}
 
       # The registry attestation above is for tooling. This is the same thing
       # as a file a person can download from the release page and read.

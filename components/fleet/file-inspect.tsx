@@ -339,8 +339,10 @@ export function FileInspectScreen({ hostId }: { hostId: string }) {
               lineHeight: 1.55,
             }}
           >
-            The agent sends the lines that caused a finding, never the file. To
-            read the whole file, open it on {detail.host.hostname}.
+            By default the agent sends the lines that caused a finding, not the
+            file — unless this server's collection policy asks for skills and
+            rules files. To read the whole file, open it on{" "}
+            {detail.host.hostname}.
           </p>
         </div>
       </Card>

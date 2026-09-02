@@ -10,9 +10,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       target: runner
-      args:
-        # Inlined into the sign-in screen at build time. Rebuild to change.
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
     image: codegate-guardian:local
     restart: unless-stopped
     depends_on:
@@ -31,6 +28,8 @@ services:
       AGENT_INGEST_TOKEN: ${AGENT_INGEST_TOKEN:-}
       # Required to claim a fresh instance; see .env.example.
       SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # The product's own site, if deployed; the sign-in screen links back to it.
+      SITE_URL: ${SITE_URL:-}
     # Loopback by default. The window between `up` and an operator claiming
     # the instance is the one moment reaching the port is most of what stands
     # in the way, and defaulting to 0.0.0.0 means a laptop on shared wifi

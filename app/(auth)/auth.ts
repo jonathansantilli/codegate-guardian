@@ -4,7 +4,16 @@ import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import { DUMMY_PASSWORD } from "@/lib/constants";
 import { getUser } from "@/lib/db/queries";
+import { getContainer } from "@/src/infrastructure";
 import { authConfig } from "./auth.config";
+
+// Auth.js builds every redirect — sign-out included — from the origin of the
+// request it received, and Next's standalone server reports that origin as the
+// address it is bound to: http://0.0.0.0:3000 inside a container. Signing out
+// of a console served at https://guardian.example sent the browser to
+// 0.0.0.0:3000. APP_URL is where this instance is actually reached, so unless
+// somebody has set AUTH_URL deliberately, that is what Auth.js gets.
+process.env.AUTH_URL ??= getContainer().env.APP_URL;
 
 // Every session belongs to someone who signed in. There is no anonymous
 // tier: this console shows a fleet's security posture.

@@ -163,6 +163,9 @@ export function FleetSearch() {
       <label className="input" style={{ width: "220px" }}>
         <Ic name="search" size={14} />
         <input
+          aria-label="Search fleet"
+          id="fleet-search"
+          name="q"
           onChange={(event) => {
             setQuery(event.target.value);
             setActive(0);

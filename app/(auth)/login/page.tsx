@@ -1,76 +1,19 @@
-"use client";
+import { Suspense } from "react";
+import { LoginForm } from "./login-form";
+import { SignUpLink } from "./sign-up-link";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useActionState, useEffect, useState } from "react";
-
-import { AuthForm } from "@/components/auth/auth-form";
-import { SubmitButton } from "@/components/auth/submit-button";
-import { toast } from "@/components/auth/toast";
-import { type LoginActionState, login } from "../actions";
-
+/**
+ * The form is static; only whether it offers sign-up depends on a server read,
+ * so that is the only part behind a boundary. Same shape as /register.
+ */
 export default function Page() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [isSuccessful, setIsSuccessful] = useState(false);
-
-  const [state, formAction] = useActionState<LoginActionState, FormData>(
-    login,
-    { status: "idle" }
-  );
-
-  const { update: updateSession } = useSession();
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: router and updateSession are stable refs
-  useEffect(() => {
-    if (state.status === "failed") {
-      toast({
-        type: "error",
-        description: "That email and password do not match.",
-      });
-    } else if (state.status === "rate_limited") {
-      toast({
-        type: "error",
-        description:
-          "Too many sign-in attempts. Wait a few minutes and try again.",
-      });
-    } else if (state.status === "invalid_data") {
-      toast({
-        type: "error",
-        description:
-          "Enter an email address and a password of at least 6 characters.",
-      });
-    } else if (state.status === "success") {
-      setIsSuccessful(true);
-      updateSession();
-      router.refresh();
-    }
-  }, [state.status]);
-
-  const handleSubmit = (formData: FormData) => {
-    setEmail(formData.get("email") as string);
-    formAction(formData);
-  };
-
   return (
-    <>
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-      <p className="text-sm text-muted-foreground">
-        Sign in to your account to continue
-      </p>
-      <AuthForm action={handleSubmit} defaultEmail={email}>
-        <SubmitButton isSuccessful={isSuccessful}>Sign in</SubmitButton>
-        <p className="text-center text-[13px] text-muted-foreground">
-          {"No account? "}
-          <Link
-            className="text-foreground underline-offset-4 hover:underline"
-            href="/register"
-          >
-            Sign up
-          </Link>
-        </p>
-      </AuthForm>
-    </>
+    <LoginForm
+      signUpLink={
+        <Suspense fallback={null}>
+          <SignUpLink />
+        </Suspense>
+      }
+    />
   );
 }

@@ -176,6 +176,7 @@ function Step({
 }
 
 function FirstRun({ rejections }: { rejections: number }) {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
   return (
     <div
       style={{
@@ -236,14 +237,16 @@ function FirstRun({ rejections }: { rejections: number }) {
           >
             <Code>
               {"npx codegate-ai enrol \\\n  --server "}
-              <span className="kw">https://guardian.example.internal</span>
+              <span className="kw">
+                {origin || "https://guardian.example.internal"}
+              </span>
               {" \\\n  --code   "}
               <span className="kw">FLEET-XXXX-XXXX</span>
             </Code>
           </Step>
 
           <Step
-            blurb="The agent reports immediately, then every six hours. This page fills in on its own."
+            blurb="The agent reports when `codegate report` runs — once, from the command above, or on whatever schedule you give it with cron, launchd or your MDM. This page fills in as reports arrive."
             n={3}
             title="Wait for the first check-in"
           >
