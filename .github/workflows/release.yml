@@ -212,7 +212,10 @@ jobs:
       - name: Hand the digest to the manifest job
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          # Named so one image's pattern cannot match another's: with plain
+          # "digest-<image>-*", the console swept up the migrate image's digests
+          # too and asked its own repository for them.
+          name: ${{ matrix.image }}__digest__${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -237,7 +240,7 @@ jobs:
       - name: Collect the digests
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          pattern: digest-${{ matrix.image }}-*
+          pattern: ${{ matrix.image }}__digest__*
           path: ${{ runner.temp }}/digests
           merge-multiple: true
 
