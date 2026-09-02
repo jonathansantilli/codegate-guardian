@@ -4,7 +4,7 @@ import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import { DUMMY_PASSWORD } from "@/lib/constants";
 import { getUser } from "@/lib/db/queries";
-import { getContainer } from "@/src/infrastructure";
+import { APP_URL_DEFAULT } from "@/src/infrastructure/composition/env";
 import { authConfig } from "./auth.config";
 
 // Auth.js builds every redirect — sign-out included — from the origin of the
@@ -13,7 +13,11 @@ import { authConfig } from "./auth.config";
 // of a console served at https://guardian.example sent the browser to
 // 0.0.0.0:3000. APP_URL is where this instance is actually reached, so unless
 // somebody has set AUTH_URL deliberately, that is what Auth.js gets.
-process.env.AUTH_URL ??= getContainer().env.APP_URL;
+//
+// Read straight from process.env rather than through the container: this runs
+// at import, and `next build` imports this module with no AUTH_SECRET or
+// POSTGRES_URL to validate.
+process.env.AUTH_URL ??= process.env.APP_URL || APP_URL_DEFAULT;
 
 // Every session belongs to someone who signed in. There is no anonymous
 // tier: this console shows a fleet's security posture.

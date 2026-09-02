@@ -28,6 +28,13 @@ function stringWithDefault(fallback: string) {
     .default(fallback);
 }
 
+/**
+ * Exported because auth.ts needs it at import time, before the container
+ * exists: it hands APP_URL to Auth.js as AUTH_URL, and validating the whole
+ * environment at import would fail `next build`, which has no AUTH_SECRET.
+ */
+export const APP_URL_DEFAULT = "http://localhost:3000";
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -42,7 +49,7 @@ const envSchema = z.object({
   // Absolute base URL this instance is reached at. Used for page metadata and
   // handed to Auth.js as AUTH_URL, so redirects point at the address people
   // use rather than the one the container is bound to.
-  APP_URL: stringWithDefault("http://localhost:3000"),
+  APP_URL: stringWithDefault(APP_URL_DEFAULT),
 
   // The site that describes this product — a separate deployment. When set,
   // the sign-in screen offers a Back link to it. Runtime, not build time.
