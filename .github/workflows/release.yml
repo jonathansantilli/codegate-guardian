@@ -11,6 +11,14 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Publish container images for a version that already has a tag, e.g.
+          1.0.4 - for when the release was cut but an image job failed. Leave
+          empty to attempt a release instead.
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -24,6 +32,7 @@ concurrency:
 jobs:
   release:
     name: tag and release
+    if: github.event_name == 'push' || inputs.version == ''
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     outputs:
@@ -99,10 +108,45 @@ jobs:
   # console. Native runners build in minutes. Each job pushes its layers by
   # digest, without a tag; the manifest job below names the image once both
   # halves exist, so a tag never points at half a release.
+  # Which version the image jobs publish: the one this push released, or the
+  # one a dispatch named. Nothing, and they do not run.
+  version:
+    name: which version
+    needs: release
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      publish: ${{ steps.pick.outputs.publish }}
+    steps:
+      - name: Pick
+        id: pick
+        env:
+          NAMED: ${{ inputs.version }}
+          RELEASED: ${{ needs.release.outputs.released }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          if [ -n "$NAMED" ]; then
+            version="$NAMED"
+          elif [ "$RELEASED" = "true" ]; then
+            version="$VERSION"
+          else
+            version=""
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [ -n "$version" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing images for ${version}"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "No version to publish images for"
+          fi
+
   publish-image:
     name: build ${{ matrix.image }} (${{ matrix.arch }})
-    needs: release
-    if: needs.release.outputs.released == 'true'
+    needs: version
+    if: needs.version.outputs.publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
@@ -124,7 +168,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: v${{ needs.release.outputs.version }}
+          ref: v${{ needs.version.outputs.version }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -177,7 +221,7 @@ jobs:
   # the SBOM a person can download from the release page.
   publish-manifest:
     name: publish ${{ matrix.image }}
-    needs: [release, publish-image]
+    needs: [version, publish-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -212,42 +256,57 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          # The moving tags move only when this push cut the release. A dispatch
+          # that backfills an older version's images must not drag `latest`,
+          # `1` or `1.0` back to it.
           tags: |
-            type=raw,value=${{ needs.release.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }},enable=${{ github.event_name == 'push' }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }},enable=${{ github.event_name == 'push' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
 
       - name: Create the multi-arch manifest
         working-directory: ${{ runner.temp }}/digests
         run: |
           # One "-t tag" per tag from the metadata step; one digest per file here.
           tags=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
-          # shellcheck disable=SC2046,SC2086
-          docker buildx imagetools create $tags \
-            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@sha256:%s ' *)
+          # The registry can take a few seconds to serve a digest that was
+          # pushed moments ago by another job; the first release with this
+          # layout failed on exactly that, two seconds after the last build.
+          for attempt in 1 2 3 4 5 6; do
+            # shellcheck disable=SC2046,SC2086
+            if docker buildx imagetools create $tags \
+                 $(printf 'ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@sha256:%s ' *); then
+              exit 0
+            fi
+            echo "attempt ${attempt} failed; waiting for the registry"
+            sleep 10
+          done
+          exit 1
 
       - name: Inspect what was published
         run: |
           docker buildx imagetools inspect \
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.release.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.version }}
 
       # The registry attestation above is for tooling. This is the same thing
       # as a file a person can download from the release page and read.
       - name: Generate SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
-          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.release.outputs.version }}
+          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.version }}
           format: spdx-json
-          artifact-name: sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json
+          artifact-name: sbom-${{ matrix.image }}-${{ needs.version.outputs.version }}.spdx.json
           output-file: sbom-${{ matrix.image }}.spdx.json
 
       - name: Attach SBOM to the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout in this job, so gh cannot infer the repository.
+          GH_REPO: ${{ github.repository }}
         run: |
           mv sbom-${{ matrix.image }}.spdx.json \
-             sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json
-          gh release upload "v${{ needs.release.outputs.version }}" \
-            "sbom-${{ matrix.image }}-${{ needs.release.outputs.version }}.spdx.json" \
+             sbom-${{ matrix.image }}-${{ needs.version.outputs.version }}.spdx.json
+          gh release upload "v${{ needs.version.outputs.version }}" \
+            "sbom-${{ matrix.image }}-${{ needs.version.outputs.version }}.spdx.json" \
             --clobber
