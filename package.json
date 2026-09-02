@@ -1,6 +1,6 @@
 {
   "name": "codegate-guardian",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Self-hosted console that shows what the codegate agent reports from developer machines.",
   "license": "MIT",
   "repository": {
