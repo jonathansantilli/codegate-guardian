@@ -40,6 +40,24 @@
   --warn: #b45309;
   --warn-bg: #fffbeb;
 }
+.gd,
+.gd * {
+  box-sizing: border-box;
+}
+.gd {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "ss02", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+
 .dark .gd {
   --bg: oklch(0.195 0 0);
   --card: oklch(0.225 0 0);
@@ -71,23 +89,6 @@
   --warn-bg: oklch(0.65 0.13 75 / 0.16);
 }
 
-.gd,
-.gd * {
-  box-sizing: border-box;
-}
-.gd {
-  display: flex;
-  width: 100%;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  font-feature-settings: "ss01", "ss02", "cv01";
-  -webkit-font-smoothing: antialiased;
-}
 .gd h1,
 .gd h2,
 .gd h3,

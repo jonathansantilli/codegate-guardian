@@ -321,6 +321,7 @@ textarea:focus-visible {
 }
 
 @layer base {
+  /* biome-ignore lint/style/noDescendingSpecificity: layered, so it never outranks the unlayered `.skeleton *` above whatever the specificity says; it sets scrollbar properties only */
   * {
     scrollbar-width: thin;
     scrollbar-color: oklch(0 0 0 / 0.12) transparent;
