@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.7...v1.1.0) (2026-09-03)
+
+
+### Features
+
+* **brand:** the mark is a dot in brackets, not a shield ([aada9e5](https://github.com/jonathansantilli/codegate-guardian/commit/aada9e5a929c72dab2554f53e074af7628b8a166))
+
 ## [1.0.7](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.6...v1.0.7) (2026-09-02)
 
 ## [1.0.6](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.5...v1.0.6) (2026-09-02)
