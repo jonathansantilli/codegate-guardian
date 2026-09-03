@@ -279,10 +279,12 @@ release.
 
 That makes the commit subject the thing that decides whether a change ships.
 Subjects follow [Conventional Commits](https://www.conventionalcommits.org/) —
-`feat:` gives a minor, `fix:` and the rest a patch, and a `BREAKING CHANGE:`
-footer gives a major. A subject that does not parse produces no release, which
-is why pull request titles are linted: they become the commit message when a
-pull request is squashed.
+`feat:` gives a minor; `fix:`, `perf:`, `refactor:`, `build:` and `revert:`
+give a patch; a `BREAKING CHANGE:` footer gives a major. `ci:`, `chore:`,
+`docs:`, `style:` and `test:` cannot change what an operator runs, so they
+produce no release and ride along with the next one that does. A subject that
+does not parse produces no release either, which is why pull request titles
+are linted: they become the commit message when a pull request is squashed.
 
 No npm package is published — this is a self-hosted console, `private: true`,
 and there is nowhere to publish it to. What a release gives you is a tag, notes
