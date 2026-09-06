@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/jonathansantilli/codegate-guardian/compare/v1.1.0...v1.1.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **auth:** keep the claim form out of the streamed boundary ([a88b580](https://github.com/jonathansantilli/codegate-guardian/commit/a88b580b8ee914e58f91900c80c6e92652a7b87f))
+
 # [1.1.0](https://github.com/jonathansantilli/codegate-guardian/compare/v1.0.7...v1.1.0) (2026-09-03)
 
 
