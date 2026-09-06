@@ -300,15 +300,27 @@ test.describe("Feature: registration closes behind the first operator", () => {
     // The setup project has already registered the operator, so this instance
     // is claimed. Reaching the port must not be one POST from full authority.
     await page.goto("/register");
-    // The refusal is reported by a client-side toast, so the form has to have
-    // hydrated before the click — otherwise this submits as a plain POST and
-    // the message never renders.
     await page.waitForLoadState("networkidle");
-    await page
-      .getByPlaceholder("you@someo.ne")
-      .fill(`refused-${Date.now()}@example.test`);
-    await page.getByLabel("Password").fill("hunter2hunter2");
-    await page.getByRole("button", { name: "Sign up", exact: true }).click();
+
+    // The screen says so, and offers nothing to fill in.
+    await expect(page.getByText("This console has its operator")).toBeVisible();
+    await expect(page.getByPlaceholder("you@someo.ne")).toBeHidden();
+
+    // The form is only hidden, and a visitor with devtools can unhide it. What
+    // refuses is the server: fill the hidden form and submit it regardless.
+    // The refusal is reported by a client-side toast, so this runs after
+    // hydration (the networkidle wait above).
+    await page.evaluate((email) => {
+      const form = document.querySelector("form");
+      if (!form) {
+        throw new Error("no claim form in the document");
+      }
+      const field = (name: string) =>
+        form.elements.namedItem(name) as HTMLInputElement;
+      field("email").value = email;
+      field("password").value = "hunter2hunter2";
+      form.requestSubmit();
+    }, `refused-${Date.now()}@example.test`);
 
     await expect(page.getByText(/already has an operator/)).toBeVisible();
     await expect(page).toHaveURL(/\/register/);

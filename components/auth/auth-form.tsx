@@ -8,7 +8,7 @@ export function AuthForm({
   children,
   defaultEmail = "",
   passwordAutoComplete = "current-password",
-  setupTokenField,
+  slot,
 }: {
   action: NonNullable<
     string | ((formData: FormData) => void | Promise<void>) | undefined
@@ -17,8 +17,11 @@ export function AuthForm({
   defaultEmail?: string;
   /** "new-password" on the claim form, so a password manager offers to make one. */
   passwordAutoComplete?: "current-password" | "new-password";
-  /** Rendered between the password and the submit; see app/(auth)/actions.ts. */
-  setupTokenField?: React.ReactNode;
+  /**
+   * Rendered between the password and the submit. The claim form streams its
+   * setup-token field, or the "already claimed" notice, into it.
+   */
+  slot?: React.ReactNode;
 }) {
   return (
     <Form action={action} className="flex flex-col gap-4">
@@ -54,7 +57,7 @@ export function AuthForm({
         />
       </div>
 
-      {setupTokenField}
+      {slot}
 
       {children}
     </Form>

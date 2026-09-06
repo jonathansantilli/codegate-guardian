@@ -361,3 +361,14 @@ textarea:focus-visible {
     background: transparent;
   }
 }
+
+/*
+ * The claim screen is static markup with one streamed slot inside the form.
+ * When that slot brings the "already claimed" notice, the form around it steps
+ * aside. CSS does it rather than JavaScript: the notice arrives as HTML, and
+ * nothing has to hydrate for the right screen to show.
+ */
+.claim-screen:has([data-claimed])
+:is(h1, p, form > *):not([data-claimed], [data-claimed] *) {
+  display: none;
+}

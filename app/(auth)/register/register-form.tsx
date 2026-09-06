@@ -9,11 +9,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { toast } from "@/components/auth/toast";
 import { type RegisterActionState, register } from "../actions";
 
-export function RegisterForm({
-  setupTokenField,
-}: {
-  setupTokenField: React.ReactNode;
-}) {
+export function RegisterForm({ gate }: { gate: React.ReactNode }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
@@ -67,7 +63,8 @@ export function RegisterForm({
   };
 
   return (
-    <>
+    // `claim-screen` lets the streamed notice hide this form; see globals.css.
+    <div className="claim-screen contents">
       <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
       <p className="text-sm text-muted-foreground">
         Claim this console as its operator
@@ -76,7 +73,7 @@ export function RegisterForm({
         action={handleSubmit}
         defaultEmail={email}
         passwordAutoComplete="new-password"
-        setupTokenField={setupTokenField}
+        slot={gate}
       >
         <SubmitButton isSuccessful={isSuccessful}>Sign up</SubmitButton>
         <p className="text-center text-[13px] text-muted-foreground">
@@ -89,6 +86,6 @@ export function RegisterForm({
           </Link>
         </p>
       </AuthForm>
-    </>
+    </div>
   );
 }
