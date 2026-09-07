@@ -174,10 +174,10 @@ jobs:
           ref: v${{ needs.version.outputs.version }}
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -185,13 +185,13 @@ jobs:
 
       - name: Labels
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: docker/Dockerfile
@@ -213,7 +213,7 @@ jobs:
           touch "$RUNNER_TEMP/digests/${digest#sha256:}"
 
       - name: Hand the digest to the manifest job
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Named so one image's pattern cannot match another's: with plain
           # "digest-<image>-*", the console swept up the migrate image's digests
@@ -242,17 +242,17 @@ jobs:
           - { image: codegate-guardian-migrate }
     steps:
       - name: Collect the digests
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ${{ matrix.image }}__digest__*
           path: ${{ runner.temp }}/digests
           merge-multiple: true
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -260,7 +260,7 @@ jobs:
 
       - name: Tags
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           # The moving tags move only when this push cut the release. A dispatch
@@ -299,7 +299,7 @@ jobs:
       # The registry attestation above is for tooling. This is the same thing
       # as a file a person can download from the release page and read.
       - name: Generate SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.version }}
           format: spdx-json
